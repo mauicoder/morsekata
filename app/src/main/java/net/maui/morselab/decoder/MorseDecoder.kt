@@ -121,8 +121,8 @@ class MorseDecoder(
         logger.info(String.format(Locale.US, "Silence: dur=%d, unit=%.1f, units=%.2f", 
             duration, silenceUnitSamples, units))
 
-        // Lower threshold for character/word gaps to handle tight timing
-        if (units >= 2.2) {
+        // Lower threshold for character/word gaps to handle tight timing and 512-sample block quantization
+        if (units >= 2.0) {
             if (currentCharMorse.isNotEmpty()) {
                 val char = morseToAscii(currentCharMorse.toString())
                 if (char.isNotEmpty()) {
@@ -143,9 +143,9 @@ class MorseDecoder(
         val evidence = if (isDot) duration.toDouble() else duration / 3.0
         
         if (!hasDecodedFirstChar && currentCharMorse.length == 1) {
-            // Initial snap to the first tone's unit
-            dotUnitSamples = evidence
-            silenceUnitSamples = evidence
+            // Blend initial tone evidence with default unit to avoid block-quantization bias
+            dotUnitSamples = (dotUnitSamples * 0.5) + (evidence * 0.5)
+            silenceUnitSamples = dotUnitSamples
         } else {
             dotUnitSamples = (dotUnitSamples * 0.85) + (evidence * 0.15)
             // Gently pull silence unit towards tone unit to maintain sync
