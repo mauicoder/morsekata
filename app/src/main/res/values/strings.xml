@@ -21,4 +21,11 @@
     <string name="share_morse_code">Share Morse code</string>
     <string name="decoded_text_will_appear_here">Decoded text will appear here...</string>
     <string name="decode_file">Decode File</string>
+    <string name="qso_trainer">Train</string>
+    <string name="qso_trainer_title">QSO &amp; Q-Code Trainer</string>
+    <string name="category_single_codes">Single Codes</string>
+    <string name="category_full_phrases">Full Phrases</string>
+    <string name="category_mixed">Mixed</string>
+    <string name="replay_audio">Replay Audio</string>
+    <string name="next_question">Next</string>
 </resources>

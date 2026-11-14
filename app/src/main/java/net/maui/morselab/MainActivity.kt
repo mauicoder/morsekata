@@ -8,6 +8,7 @@ import net.maui.morselab.databinding.ActivityMainBinding
 import net.maui.morselab.fragment.ConfigFragment
 import net.maui.morselab.fragment.MorseDecoderFragment
 import net.maui.morselab.fragment.PlayTextFragment
+import net.maui.morselab.fragment.QsoTrainerFragment
 import javax.inject.Inject
 
 @AndroidEntryPoint
@@ -21,6 +22,9 @@ class MainActivity : AppCompatActivity() {
 
     @Inject
     lateinit var decoderFragment: MorseDecoderFragment
+
+    @Inject
+    lateinit var qsoTrainerFragment: QsoTrainerFragment
 
     private fun replaceFragment(fragment: Fragment) : Boolean {
         supportFragmentManager.beginTransaction().replace(R.id.flFragment, fragment).commit()
@@ -36,6 +40,7 @@ class MainActivity : AppCompatActivity() {
             when(it.itemId) {
               R.id.miPlay -> replaceFragment(playTextFragment)
               R.id.miDecode -> replaceFragment(decoderFragment)
+              R.id.miTrain -> replaceFragment(qsoTrainerFragment)
               R.id.miConfig -> replaceFragment(configFragment)
                 else -> false
             }

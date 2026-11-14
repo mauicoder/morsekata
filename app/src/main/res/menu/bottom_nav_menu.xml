@@ -10,6 +10,10 @@
             android:title="@string/decode"
             android:icon="@drawable/ic_mic"/>
         <item
+            android:id="@+id/miTrain"
+            android:title="@string/qso_trainer"
+            android:icon="@drawable/ic_train"/>
+        <item
             android:id="@+id/miConfig"
             android:title="@string/config"
             android:icon="@drawable/ic_settings"/>

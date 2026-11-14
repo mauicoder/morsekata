@@ -2,8 +2,6 @@ package net.maui.morselab.viewmodel
 
 import android.content.ContentValues
 import android.content.Context
-import android.media.AudioFormat
-import android.media.AudioTrack
 import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
@@ -16,27 +14,31 @@ import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
-import kotlinx.coroutines.yield
 import net.maui.morselab.ShareFile
 import net.maui.morselab.data.UserPreferences
 import net.maui.morselab.data.UserPreferencesRepository
+import net.maui.morselab.generator.MorseAudioPlayer
+import net.maui.morselab.generator.MorseAudioPlayerImpl
 import net.maui.morselab.generator.MorseSoundGenerator
 import javax.inject.Inject
 
 @HiltViewModel
 class PlayTextViewModel @Inject constructor(
-    userPreferencesRepository: UserPreferencesRepository
+    userPreferencesRepository: UserPreferencesRepository,
+    private val morseAudioPlayer: MorseAudioPlayer
 ) : ViewModel() {
+
+    constructor(userPreferencesRepository: UserPreferencesRepository) : this(
+        userPreferencesRepository,
+        MorseAudioPlayerImpl()
+    )
 
     private val SAMPLE_RATE = 44100
     private val TAG = "PlayTextViewModel"
 
-    private var playJob: Job? = null
     private val morseSoundGenerator = MorseSoundGenerator()
     private val shareFile = ShareFile()
 
@@ -47,38 +49,13 @@ class PlayTextViewModel @Inject constructor(
     val isReady: LiveData<Boolean> = userPreferences.map { true }.asLiveData()
 
     fun playMorseCallback() {
-        if (playJob?.isActive == true) {
-            Log.i(TAG, "Stopping existing playback.")
-            playJob?.cancel()
-        }
-
         val prefs = userPreferences.value
         val text = textLiveData.value ?: return
-        
-        Log.i(TAG, "playMorseCallback: text=$text, prefs=$prefs")
-        
-        playJob = viewModelScope.launch(Dispatchers.Default) {
-            Log.i(TAG, "Playback coroutine started.")
-            try {
-                val soundData = morseSoundGenerator.generate(
-                    text,
-                    prefs.wpm,
-                    prefs.farnsworthWpm,
-                    prefs.frequency,
-                    SAMPLE_RATE
-                )
-                Log.i(TAG, "Sound generated, size=${soundData.size} samples.")
-                playSound(soundData, SAMPLE_RATE)
-            } catch (e: Exception) {
-                Log.e(TAG, "Error in playback coroutine", e)
-            } finally {
-                Log.i(TAG, "Playback coroutine finished.")
-            }
-        }
+        morseAudioPlayer.play(text, prefs)
     }
 
     fun stopPlayback() {
-        playJob?.cancel()
+        morseAudioPlayer.stop()
     }
 
     fun shareMorseAsWaveFile(activity: FragmentActivity) {
@@ -148,58 +125,6 @@ class PlayTextViewModel @Inject constructor(
                     }
                 }
             }
-        }
-    }
-
-    private suspend fun playSound(soundData: ShortArray, sampleRate: Int) {
-        val minBufferSize = AudioTrack.getMinBufferSize(
-            sampleRate,
-            AudioFormat.CHANNEL_OUT_MONO,
-            AudioFormat.ENCODING_PCM_16BIT
-        )
-        
-        val audioTrack = AudioTrack.Builder()
-            .setAudioAttributes(
-                android.media.AudioAttributes.Builder()
-                    .setUsage(android.media.AudioAttributes.USAGE_MEDIA)
-                    .setContentType(android.media.AudioAttributes.CONTENT_TYPE_MUSIC)
-                    .build()
-            )
-            .setAudioFormat(
-                AudioFormat.Builder()
-                    .setSampleRate(sampleRate)
-                    .setChannelMask(AudioFormat.CHANNEL_OUT_MONO)
-                    .setEncoding(AudioFormat.ENCODING_PCM_16BIT)
-                    .build()
-            )
-            .setBufferSizeInBytes(maxOf(minBufferSize, soundData.size * 2))
-            .setTransferMode(AudioTrack.MODE_STREAM)
-            .build()
-
-        try {
-            audioTrack.play()
-            var offset = 0
-            while (offset < soundData.size) {
-                val shortsToWrite = minOf(soundData.size - offset, minBufferSize / 2)
-                val result = audioTrack.write(soundData, offset, shortsToWrite)
-                if (result <= 0) break
-                offset += result
-                yield()
-            }
-            
-            // Wait for the hardware to finish playing
-            while (audioTrack.playbackHeadPosition < soundData.size) {
-                delay(50)
-            }
-            Log.i(TAG, "Playback finished physically.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error during AudioTrack playback", e)
-        } finally {
-            try {
-                audioTrack.stop()
-            } catch (_: Exception) {}
-            audioTrack.release()
-            Log.i(TAG, "AudioTrack released.")
         }
     }
 }

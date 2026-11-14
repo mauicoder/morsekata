@@ -14,6 +14,7 @@ MorseLab is an experimental Android application designed for learning, improving
 ## ✨ Features
 - **Text to Morse Audio:** Generate high-quality wave audio from text strings.
 - **Audio Sharing:** Export and share generated Morse wave files.
+- **Training** Q-Codes and CW Abbreviations listening training
 - **Configurable Parameters:**
   - **Frequency:** Default 800 Hz (Customizable)
   - **WPM (Words per minute):** Default 20
