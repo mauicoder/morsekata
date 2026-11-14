@@ -9,15 +9,24 @@ import kotlin.math.sin
 class MorseSoundGenerator {
 
     companion object {
-        const val PEAK_AMPLITUDE_FACTOR = 0.75
-        const val MAX_AMPLITUDE = (Short.MAX_VALUE * PEAK_AMPLITUDE_FACTOR).toInt() // 24575
-        const val FADE_DURATION_MS = 5
-        const val MAX_FADE_RATIO = 0.40
+        const val PEAK_AMPLITUDE_FACTOR = 0.35
+        const val MAX_AMPLITUDE = (Short.MAX_VALUE * PEAK_AMPLITUDE_FACTOR).toInt() // 11468
+        const val ATTACK_DURATION_MS = 10
+        const val RELEASE_DURATION_MS = 14
+        const val MAX_ENVELOPE_RATIO = 0.90
         const val PADDING_SILENCE_MS = 20
+
+        // 4-term Blackman-Harris window coefficients
+        private const val BH_A0 = 0.35875
+        private const val BH_A1 = 0.48829
+        private const val BH_A2 = 0.14128
+        private const val BH_A3 = 0.01168
+        private const val BH_MIN = BH_A0 - BH_A1 + BH_A2 - BH_A3 // 0.00006
     }
 
     /**
-     * Generates a 16-bit PCM Mono audio stream for the given text.
+     * Generates a 16-bit PCM Mono audio stream for the given text using a single-pass
+     * continuous-phase oscillator and an asymmetric 4-term Blackman-Harris envelope.
      */
     fun generate(
         text: String,
@@ -38,78 +47,122 @@ class MorseSoundGenerator {
 
         val dotDuration = morseTiming(wpm)
         val dashDuration = 3 * dotDuration
-        val intraCharacterPause = createSilence(dotDuration * sampleRate / 1000)
+        val dotSamples = dotDuration * sampleRate / 1000
+        val dashSamples = dashDuration * sampleRate / 1000
+        val intraCharacterPauseSamples = dotSamples
 
         val farnsworthDotDuration = morseTiming(farnsworthWpm)
-        val interCharacterPause = createSilence(3 * farnsworthDotDuration * sampleRate / 1000)
-        val interWordPause = createSilence(7 * farnsworthDotDuration * sampleRate / 1000)
-        val paddingSilence = createSilence(PADDING_SILENCE_MS * sampleRate / 1000)
+        val interCharacterPauseSamples = 3 * farnsworthDotDuration * sampleRate / 1000
+        val interWordPauseSamples = 7 * farnsworthDotDuration * sampleRate / 1000
+        val paddingSilenceSamples = PADDING_SILENCE_MS * sampleRate / 1000
 
-        val dotWave = generateSineWave(frequency, dotDuration, sampleRate)
-        val dashWave = generateSineWave(frequency, dashDuration, sampleRate)
-
-        val morseSoundList = mutableListOf<ShortArray>()
-        morseSoundList.add(paddingSilence)
-
+        // Calculate exact total sample length for single-pass buffer allocation
+        var totalSamples = paddingSilenceSamples * 2
         validWords.forEachIndexed { wordIndex, wordCharacters ->
             if (wordIndex > 0) {
-                morseSoundList.add(interWordPause)
+                totalSamples += interWordPauseSamples
             }
             wordCharacters.forEachIndexed { charIndex, morseCode ->
                 if (charIndex > 0) {
-                    morseSoundList.add(interCharacterPause)
+                    totalSamples += interCharacterPauseSamples
                 }
                 morseCode.forEachIndexed { symbolIndex, symbol ->
                     if (symbolIndex > 0) {
-                        morseSoundList.add(intraCharacterPause)
+                        totalSamples += intraCharacterPauseSamples
                     }
-                    when (symbol) {
-                        '.' -> morseSoundList.add(dotWave)
-                        '-' -> morseSoundList.add(dashWave)
+                    totalSamples += when (symbol) {
+                        '.' -> dotSamples
+                        '-' -> dashSamples
+                        else -> 0
                     }
                 }
             }
         }
 
-        morseSoundList.add(paddingSilence)
+        val output = ShortArray(totalSamples)
+        var cursor = paddingSilenceSamples
 
-        return concatenateSounds(*morseSoundList.toTypedArray())
+        validWords.forEachIndexed { wordIndex, wordCharacters ->
+            if (wordIndex > 0) {
+                cursor += interWordPauseSamples
+            }
+            wordCharacters.forEachIndexed { charIndex, morseCode ->
+                if (charIndex > 0) {
+                    cursor += interCharacterPauseSamples
+                }
+                morseCode.forEachIndexed { symbolIndex, symbol ->
+                    if (symbolIndex > 0) {
+                        cursor += intraCharacterPauseSamples
+                    }
+                    val toneSamples = when (symbol) {
+                        '.' -> dotSamples
+                        '-' -> dashSamples
+                        else -> 0
+                    }
+                    if (toneSamples > 0) {
+                        writeContinuousPhaseTone(
+                            buffer = output,
+                            startSampleIndex = cursor,
+                            numSamples = toneSamples,
+                            frequency = frequency,
+                            sampleRate = sampleRate
+                        )
+                        cursor += toneSamples
+                    }
+                }
+            }
+        }
+
+        return output
     }
 
-    private fun createSilence(numSamples: Int): ShortArray {
-        return ShortArray(numSamples)
-    }
-
-    private fun generateSineWave(
+    private fun writeContinuousPhaseTone(
+        buffer: ShortArray,
+        startSampleIndex: Int,
+        numSamples: Int,
         frequency: Int,
-        durationMs: Int,
         sampleRate: Int
-    ): ShortArray {
-        val numSamples = (sampleRate * (durationMs / 1000.0)).toInt()
-        if (numSamples <= 0) return ShortArray(0)
+    ) {
+        val targetAttackSamples = ATTACK_DURATION_MS * sampleRate / 1000
+        val targetReleaseSamples = RELEASE_DURATION_MS * sampleRate / 1000
+        val maxEnvelopeSamples = (numSamples * MAX_ENVELOPE_RATIO).toInt()
+        val totalTargetEnvelope = targetAttackSamples + targetReleaseSamples
 
-        val targetFadeSamples = FADE_DURATION_MS * sampleRate / 1000
-        val maxFadeSamples = (numSamples * MAX_FADE_RATIO).toInt()
-        val fadeSamples = minOf(targetFadeSamples, maxFadeSamples)
+        val attackSamples: Int
+        val releaseSamples: Int
+        if (totalTargetEnvelope > maxEnvelopeSamples && totalTargetEnvelope > 0) {
+            attackSamples = maxEnvelopeSamples * targetAttackSamples / totalTargetEnvelope
+            releaseSamples = maxEnvelopeSamples - attackSamples
+        } else {
+            attackSamples = targetAttackSamples
+            releaseSamples = targetReleaseSamples
+        }
 
-        val sample = ShortArray(numSamples)
+        val phaseIncrement = 2.0 * Math.PI * frequency / sampleRate
 
-        for (i in sample.indices) {
-            val angle = 2.0 * Math.PI * i * frequency / sampleRate
-            var amplitude = sin(angle) * MAX_AMPLITUDE
-
+        for (i in 0 until numSamples) {
+            val globalIndex = startSampleIndex + i
+            val angle = globalIndex * phaseIncrement
             val envelope = when {
-                fadeSamples > 0 && i < fadeSamples ->
-                    (1.0 - cos(i * Math.PI / fadeSamples)) / 2.0
-                fadeSamples > 0 && i >= numSamples - fadeSamples ->
-                    (1.0 - cos(((numSamples - 1) - i) * Math.PI / fadeSamples)) / 2.0
+                attackSamples > 0 && i < attackSamples ->
+                    blackmanHarrisRamp(i.toDouble() / attackSamples)
+                releaseSamples > 0 && i >= numSamples - releaseSamples ->
+                    blackmanHarrisRamp(((numSamples - 1) - i).toDouble() / releaseSamples)
                 else -> 1.0
             }
-            amplitude *= envelope
-
-            sample[i] = amplitude.toInt().toShort()
+            val amplitude = sin(angle) * MAX_AMPLITUDE * envelope
+            buffer[globalIndex] = amplitude.toInt().toShort()
         }
-        return sample
+    }
+
+    private fun blackmanHarrisRamp(phase: Double): Double {
+        if (phase <= 0.0) return 0.0
+        if (phase >= 1.0) return 1.0
+        val raw = BH_A0 -
+            BH_A1 * cos(Math.PI * phase) +
+            BH_A2 * cos(2.0 * Math.PI * phase) -
+            BH_A3 * cos(3.0 * Math.PI * phase)
+        return ((raw - BH_MIN) / (1.0 - BH_MIN)).coerceIn(0.0, 1.0)
     }
 
     /**
@@ -126,10 +179,10 @@ class MorseSoundGenerator {
         val dataSizeInBytes = morseCodeShorts.size * 2
 
         val byteBuffer = ByteBuffer.allocate(44 + dataSizeInBytes).order(ByteOrder.LITTLE_ENDIAN)
-        
+
         // Add WAV Header
         createWavHeader(byteBuffer, dataSizeInBytes, sampleRate)
-        
+
         // Add PCM Data
         for (s in morseCodeShorts) {
             byteBuffer.putShort(s)
@@ -156,17 +209,6 @@ class MorseSoundGenerator {
 
         buffer.put("data".toByteArray())             // Data chunk header
         buffer.putInt(dataSize)                      // Size of data section
-    }
-
-    private fun concatenateSounds(vararg sounds: ShortArray): ShortArray {
-        val totalLength = sounds.sumOf { it.size }
-        val result = ShortArray(totalLength)
-        var offset = 0
-        for (sound in sounds) {
-            System.arraycopy(sound, 0, result, offset, sound.size)
-            offset += sound.size
-        }
-        return result
     }
 
     private fun morseTiming(wpm: Int): Int {
