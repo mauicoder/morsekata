@@ -8,6 +8,14 @@ import kotlin.math.sin
 
 class MorseSoundGenerator {
 
+    companion object {
+        const val PEAK_AMPLITUDE_FACTOR = 0.75
+        const val MAX_AMPLITUDE = (Short.MAX_VALUE * PEAK_AMPLITUDE_FACTOR).toInt() // 24575
+        const val FADE_DURATION_MS = 5
+        const val MAX_FADE_RATIO = 0.40
+        const val PADDING_SILENCE_MS = 20
+    }
+
     /**
      * Generates a 16-bit PCM Mono audio stream for the given text.
      */
@@ -18,6 +26,16 @@ class MorseSoundGenerator {
         frequency: Int,
         sampleRate: Int
     ): ShortArray {
+        val validWords = text.uppercase()
+            .trim()
+            .split(Regex("\\s+"))
+            .map { word -> word.mapNotNull { char -> MorseCodeMaps.asciiToMorse[char] } }
+            .filter { it.isNotEmpty() }
+
+        if (validWords.isEmpty()) {
+            return ShortArray(0)
+        }
+
         val dotDuration = morseTiming(wpm)
         val dashDuration = 3 * dotDuration
         val intraCharacterPause = createSilence(dotDuration * sampleRate / 1000)
@@ -25,67 +43,66 @@ class MorseSoundGenerator {
         val farnsworthDotDuration = morseTiming(farnsworthWpm)
         val interCharacterPause = createSilence(3 * farnsworthDotDuration * sampleRate / 1000)
         val interWordPause = createSilence(7 * farnsworthDotDuration * sampleRate / 1000)
+        val paddingSilence = createSilence(PADDING_SILENCE_MS * sampleRate / 1000)
+
+        val dotWave = generateSineWave(frequency, dotDuration, sampleRate)
+        val dashWave = generateSineWave(frequency, dashDuration, sampleRate)
 
         val morseSoundList = mutableListOf<ShortArray>()
+        morseSoundList.add(paddingSilence)
 
-        // Add a small initial pause for clean playback from the start.
-        morseSoundList.add(intraCharacterPause)
-
-        text.uppercase().forEach { char ->
-            when (char) {
-                ' ' -> morseSoundList.add(interWordPause) // Space between words
-                else -> {
-                    val morseCode = MorseCodeMaps.asciiToMorse[char] ?: return@forEach
-                    morseCode.forEach { symbol ->
-                        when (symbol) {
-                            '.' -> morseSoundList.add(
-                                generateSineWave(
-                                    frequency,
-                                    dotDuration,
-                                    sampleRate
-                                )
-                            )
-
-                            '-' -> morseSoundList.add(
-                                generateSineWave(
-                                    frequency,
-                                    dashDuration,
-                                    sampleRate
-                                )
-                            )
-                        }
-                        morseSoundList.add(intraCharacterPause) // Pause between dots and dashes within a character
+        validWords.forEachIndexed { wordIndex, wordCharacters ->
+            if (wordIndex > 0) {
+                morseSoundList.add(interWordPause)
+            }
+            wordCharacters.forEachIndexed { charIndex, morseCode ->
+                if (charIndex > 0) {
+                    morseSoundList.add(interCharacterPause)
+                }
+                morseCode.forEachIndexed { symbolIndex, symbol ->
+                    if (symbolIndex > 0) {
+                        morseSoundList.add(intraCharacterPause)
                     }
-                    morseSoundList.add(interCharacterPause) // Pause between characters
+                    when (symbol) {
+                        '.' -> morseSoundList.add(dotWave)
+                        '-' -> morseSoundList.add(dashWave)
+                    }
                 }
             }
         }
+
+        morseSoundList.add(paddingSilence)
 
         return concatenateSounds(*morseSoundList.toTypedArray())
     }
 
     private fun createSilence(numSamples: Int): ShortArray {
-        return ShortArray(numSamples) // Shorts initialized to 0 (silence in 16-bit PCM)
+        return ShortArray(numSamples)
     }
 
     private fun generateSineWave(
         frequency: Int,
         durationMs: Int,
-        sampleRate: Int,
-        fadePercentage: Double = 0.1 // 10% fade-in and fade-out
+        sampleRate: Int
     ): ShortArray {
         val numSamples = (sampleRate * (durationMs / 1000.0)).toInt()
-        val fadeSamples = (numSamples * fadePercentage).toInt()
+        if (numSamples <= 0) return ShortArray(0)
+
+        val targetFadeSamples = FADE_DURATION_MS * sampleRate / 1000
+        val maxFadeSamples = (numSamples * MAX_FADE_RATIO).toInt()
+        val fadeSamples = minOf(targetFadeSamples, maxFadeSamples)
+
         val sample = ShortArray(numSamples)
 
         for (i in sample.indices) {
             val angle = 2.0 * Math.PI * i * frequency / sampleRate
-            var amplitude = sin(angle) * 32767.0
+            var amplitude = sin(angle) * MAX_AMPLITUDE
 
-            // Apply cosine-based fade-in and fade-out for smoothing (Hanning envelope)
             val envelope = when {
-                i < fadeSamples -> (1.0 - cos(i * Math.PI / fadeSamples)) / 2.0
-                i >= numSamples - fadeSamples -> (1.0 - cos(((numSamples - 1) - i) * Math.PI / fadeSamples)) / 2.0
+                fadeSamples > 0 && i < fadeSamples ->
+                    (1.0 - cos(i * Math.PI / fadeSamples)) / 2.0
+                fadeSamples > 0 && i >= numSamples - fadeSamples ->
+                    (1.0 - cos(((numSamples - 1) - i) * Math.PI / fadeSamples)) / 2.0
                 else -> 1.0
             }
             amplitude *= envelope
