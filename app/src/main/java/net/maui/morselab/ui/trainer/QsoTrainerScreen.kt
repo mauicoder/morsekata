@@ -115,6 +115,7 @@ fun QsoTrainerScreen(
                     onReplayAudio = onReplayAudio,
                     onNextQuestion = onNextQuestion
                 )
+                QsoTrainerTab.FULL_QSO -> {}
                 QsoTrainerTab.STATS -> StatsAndStreaksTabContent(
                     stats = uiModel.stats,
                     onPracticeCategory = onPracticeCategory,

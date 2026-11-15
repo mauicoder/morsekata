@@ -3,17 +3,6 @@ package net.maui.morselab.trainer
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-enum class OptionHighlightState {
-    DEFAULT,
-    CORRECT,
-    INCORRECT
-}
-
-data class OptionPresentationState(
-    val text: String,
-    val highlightState: OptionHighlightState
-)
-
 data class QsoTrainerUiModel(
     val rankText: String,
     val xpText: String,
