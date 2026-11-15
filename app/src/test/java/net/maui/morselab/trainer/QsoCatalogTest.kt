@@ -36,7 +36,7 @@ class QsoCatalogTest {
         val singleCodeTexts = entries.filter { it.type == QsoEntryType.SINGLE_CODE }
             .map { it.codeOrPhrase }
             .toSet()
-        val fullPhraseTexts = entries.filter { it.type == QsoEntryType.FULL_PHRASE }
+        val actualFullPhraseTexts = entries.filter { it.type == QsoEntryType.FULL_PHRASE }
             .map { it.codeOrPhrase }
             .toSet()
 
@@ -45,8 +45,8 @@ class QsoCatalogTest {
             singleCodeTexts.containsAll(requiredSingleCodes)
         )
         assertTrue(
-            "Missing required full phrases: ${requiredFullPhrases - fullPhraseTexts}",
-            fullPhraseTexts.containsAll(requiredFullPhrases)
+            "Missing required full phrases: ${requiredFullPhrases - actualFullPhraseTexts}",
+            actualFullPhraseTexts.containsAll(requiredFullPhrases)
         )
 
         entries.forEach { entry ->
@@ -115,6 +115,108 @@ class QsoCatalogTest {
                 )
             }
         }
+    }
+
+    @Test
+    fun `ItemMastery isMastered is true when consecutiveCorrect is at least 3`() {
+        assertFalse(ItemMastery(attempts = 0, correct = 0, consecutiveCorrect = 0).isMastered)
+        assertFalse(ItemMastery(attempts = 2, correct = 2, consecutiveCorrect = 2).isMastered)
+        assertTrue(ItemMastery(attempts = 3, correct = 3, consecutiveCorrect = 3).isMastered)
+        assertTrue(ItemMastery(attempts = 6, correct = 5, consecutiveCorrect = 4).isMastered)
+    }
+
+    @Test
+    fun `OperatorRank fromXp and progressPercent match 5 Ham Radio rank thresholds`() {
+        assertEquals("SWL (Shortwave Listener)", OperatorRank.SWL.displayName)
+        assertEquals(OperatorRank.SWL, OperatorRank.fromXp(0))
+        assertEquals(OperatorRank.SWL, OperatorRank.fromXp(99))
+        assertEquals(0, OperatorRank.progressPercent(0))
+        assertEquals(50, OperatorRank.progressPercent(50))
+        assertEquals(99, OperatorRank.progressPercent(99))
+
+        assertEquals(OperatorRank.NOVICE, OperatorRank.fromXp(100))
+        assertEquals(OperatorRank.NOVICE, OperatorRank.fromXp(299))
+        assertEquals(0, OperatorRank.progressPercent(100))
+        assertEquals(50, OperatorRank.progressPercent(200))
+
+        assertEquals(OperatorRank.TECHNICIAN, OperatorRank.fromXp(300))
+        assertEquals(OperatorRank.TECHNICIAN, OperatorRank.fromXp(699))
+        assertEquals(0, OperatorRank.progressPercent(300))
+        assertEquals(50, OperatorRank.progressPercent(500))
+
+        assertEquals(OperatorRank.GENERAL, OperatorRank.fromXp(700))
+        assertEquals(OperatorRank.GENERAL, OperatorRank.fromXp(1499))
+        assertEquals(0, OperatorRank.progressPercent(700))
+        assertEquals(50, OperatorRank.progressPercent(1100))
+
+        assertEquals(OperatorRank.AMATEUR_EXTRA, OperatorRank.fromXp(1500))
+        assertEquals(OperatorRank.AMATEUR_EXTRA, OperatorRank.fromXp(5000))
+        assertEquals(100, OperatorRank.progressPercent(1500))
+        assertEquals(100, OperatorRank.progressPercent(5000))
+    }
+
+    @Test
+    fun `XpAward calculate computes Base Streak and FirstCopy bonuses accurately`() {
+        val wrong = XpAward.calculate(isCorrect = false, newAnswerStreak = 0, preAnswerReplayCount = 0)
+        assertEquals(XpAward(0, 0, 0), wrong)
+        assertEquals(0, wrong.totalXpEarned)
+
+        val firstCopyStreak1 = XpAward.calculate(isCorrect = true, newAnswerStreak = 1, preAnswerReplayCount = 0)
+        assertEquals(XpAward(baseXp = 10, streakBonusXp = 0, firstCopyBonusXp = 5), firstCopyStreak1)
+        assertEquals(15, firstCopyStreak1.totalXpEarned)
+
+        val replayedStreak3 = XpAward.calculate(isCorrect = true, newAnswerStreak = 3, preAnswerReplayCount = 2)
+        assertEquals(XpAward(baseXp = 10, streakBonusXp = 4, firstCopyBonusXp = 0), replayedStreak3)
+        assertEquals(14, replayedStreak3.totalXpEarned)
+
+        val cappedStreak10 = XpAward.calculate(isCorrect = true, newAnswerStreak = 10, preAnswerReplayCount = 0)
+        assertEquals(XpAward(baseXp = 10, streakBonusXp = 10, firstCopyBonusXp = 5), cappedStreak10)
+        assertEquals(25, cappedStreak10.totalXpEarned)
+    }
+
+    @Test
+    fun `entryWeight and selectAdaptiveEntry weight missed items 4x mastered items and exclude previous entry`() {
+        assertEquals(3, QsoCatalog.entryWeight(null))
+        assertEquals(3, QsoCatalog.entryWeight(ItemMastery(attempts = 0, correct = 0, consecutiveCorrect = 0)))
+        assertEquals(4, QsoCatalog.entryWeight(ItemMastery(attempts = 2, correct = 1, consecutiveCorrect = 0)))
+        assertEquals(2, QsoCatalog.entryWeight(ItemMastery(attempts = 1, correct = 1, consecutiveCorrect = 1)))
+        assertEquals(2, QsoCatalog.entryWeight(ItemMastery(attempts = 2, correct = 2, consecutiveCorrect = 2)))
+        assertEquals(1, QsoCatalog.entryWeight(ItemMastery(attempts = 3, correct = 3, consecutiveCorrect = 3)))
+
+        val singlePool = QsoCatalog.entriesForCategory(QsoCategory.SINGLE_CODES)
+        val excluded = singlePool[0]
+        val missedTarget = singlePool[1]
+        // Mark all other items mastered (weight 1) and missedTarget missed (weight 4)
+        val masteryMap = singlePool.associate { entry ->
+            entry.codeOrPhrase to if (entry == missedTarget) {
+                ItemMastery(attempts = 3, correct = 1, consecutiveCorrect = 0)
+            } else {
+                ItemMastery(attempts = 3, correct = 3, consecutiveCorrect = 3)
+            }
+        }
+
+        val random = Random(99)
+        var missedCount = 0
+        repeat(200) {
+            val picked = QsoCatalog.selectAdaptiveEntry(
+                category = QsoCategory.SINGLE_CODES,
+                masteryMap = masteryMap,
+                exclude = excluded,
+                random = random
+            )
+            assertNotEquals(excluded, picked)
+            if (picked == missedTarget) {
+                missedCount++
+            }
+        }
+        assertTrue("Missed target should be sampled disproportionately often, got $missedCount/200", missedCount >= 15)
+    }
+
+    @Test
+    fun `formatMorsePattern formats single codes and multi-word phrases with slash word separators`() {
+        assertEquals("--.- - ....", QsoCatalog.formatMorsePattern("QTH"))
+        assertEquals("-.-. --.- / -.-. --.- / -.-. --.- / -.. .", QsoCatalog.formatMorsePattern("CQ CQ CQ DE"))
+        assertEquals("--.- - .... / .. ...", QsoCatalog.formatMorsePattern("QTH IS"))
     }
 
     @Test

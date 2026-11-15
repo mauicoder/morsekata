@@ -3,6 +3,7 @@ package net.maui.morselab.data
 import android.content.Context
 import androidx.datastore.core.DataStore
 import androidx.datastore.core.DataStoreFactory
+import androidx.datastore.core.handlers.ReplaceFileCorruptionHandler
 import androidx.datastore.dataStoreFile
 import dagger.Binds
 import dagger.Module
@@ -13,9 +14,11 @@ import dagger.hilt.components.SingletonComponent
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.SupervisorJob
+import java.time.Clock
 import javax.inject.Singleton
 
 private const val DATA_STORE_FILE_NAME = "user_prefs.json"
+private const val TRAINER_PROGRESS_FILE_NAME = "trainer_progress.json"
 
 @InstallIn(SingletonComponent::class)
 @Module
@@ -26,6 +29,12 @@ abstract class DataStoreModule {
     abstract fun bindUserPreferencesRepository(
         userPreferencesRepositoryImpl: UserPreferencesRepositoryImpl
     ): UserPreferencesRepository
+
+    @Binds
+    @Singleton
+    abstract fun bindTrainerProgressRepository(
+        trainerProgressRepositoryImpl: TrainerProgressRepositoryImpl
+    ): TrainerProgressRepository
 
     companion object {
         @Singleton
@@ -38,5 +47,20 @@ abstract class DataStoreModule {
                 scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
             )
         }
+
+        @Singleton
+        @Provides
+        fun provideTrainerProgressDataStore(@ApplicationContext appContext: Context): DataStore<TrainerProgress> {
+            return DataStoreFactory.create(
+                serializer = TrainerProgressSerializer,
+                produceFile = { appContext.dataStoreFile(TRAINER_PROGRESS_FILE_NAME) },
+                corruptionHandler = ReplaceFileCorruptionHandler { TrainerProgress() },
+                scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
+            )
+        }
+
+        @Singleton
+        @Provides
+        fun provideClock(): Clock = Clock.systemDefaultZone()
     }
 }
