@@ -3,6 +3,7 @@ package net.maui.morselab.viewmodel
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
+import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -15,15 +16,14 @@ import net.maui.morselab.data.TrainerProgressRepository
 import net.maui.morselab.data.UserPreferences
 import net.maui.morselab.data.UserPreferencesRepository
 import net.maui.morselab.generator.MorseAudioPlayer
-import net.maui.morselab.trainer.ItemMastery
 import net.maui.morselab.trainer.OperatorRank
 import net.maui.morselab.trainer.QsoCatalog
 import net.maui.morselab.trainer.QsoCategory
 import net.maui.morselab.trainer.QsoTrainerUiState
-import net.maui.morselab.trainer.XpAward
 import java.time.Clock
 import java.time.LocalDate
 import javax.inject.Inject
+import kotlin.coroutines.EmptyCoroutineContext
 import kotlin.random.Random
 
 @HiltViewModel
@@ -35,13 +35,15 @@ class QsoTrainerViewModel @Inject constructor(
 ) : ViewModel() {
 
     private var random: Random = Random.Default
+    private var coroutineDispatcher: CoroutineDispatcher? = null
 
     internal constructor(
         userPreferencesRepository: UserPreferencesRepository,
         trainerProgressRepository: TrainerProgressRepository,
         morseAudioPlayer: MorseAudioPlayer,
         clock: Clock = Clock.systemDefaultZone(),
-        random: Random = Random.Default
+        random: Random = Random.Default,
+        dispatcher: CoroutineDispatcher = Dispatchers.Unconfined
     ) : this(
         userPreferencesRepository = userPreferencesRepository,
         trainerProgressRepository = trainerProgressRepository,
@@ -49,10 +51,12 @@ class QsoTrainerViewModel @Inject constructor(
         clock = clock
     ) {
         this.random = random
+        this.coroutineDispatcher = dispatcher
         _uiState.value = createInitialState(
             category = QsoCategory.SINGLE_CODES,
             progress = trainerProgressRepository.trainerProgress.value
         )
+        observeTrainerProgress()
     }
 
     val userPreferences: StateFlow<UserPreferences> = userPreferencesRepository.userPreferences
@@ -65,8 +69,22 @@ class QsoTrainerViewModel @Inject constructor(
     )
     val uiState: StateFlow<QsoTrainerUiState> = _uiState.asStateFlow()
 
+    private var progressObserverStarted = false
+
     init {
-        viewModelScope.launch(Dispatchers.Unconfined) {
+        try {
+            observeTrainerProgress()
+        } catch (_: IllegalStateException) {
+            // In JVM unit tests without Dispatchers.Main initialized, the internal constructor
+            // sets coroutineDispatcher = Dispatchers.Unconfined and starts observation.
+        }
+    }
+
+    private fun observeTrainerProgress() {
+        if (progressObserverStarted) return
+        val context = coroutineDispatcher ?: EmptyCoroutineContext
+        viewModelScope.launch(context) {
+            progressObserverStarted = true
             trainerProgressRepository.trainerProgress.collect { progress ->
                 _uiState.update { current ->
                     syncStateWithProgress(current, progress)
@@ -90,92 +108,38 @@ class QsoTrainerViewModel @Inject constructor(
         val progress = trainerProgressRepository.trainerProgress.value
         val targetCode = current.currentEntry.codeOrPhrase
         val correct = option == targetCode
+        val todayEpochDay = LocalDate.now(clock).toEpochDay()
 
-        val newAnswerStreak = if (correct) current.streak + 1 else 0
-        val newBestStreak = maxOf(current.bestStreak, newAnswerStreak)
-        val xpAward = XpAward.calculate(
+        val transition = progress.recordAnswer(
+            codeOrPhrase = targetCode,
             isCorrect = correct,
-            newAnswerStreak = newAnswerStreak,
-            preAnswerReplayCount = current.replayCount
+            preAnswerReplayCount = current.replayCount,
+            todayEpochDay = todayEpochDay,
+            dailyGoalTarget = current.dailyGoalTarget
         )
-
-        val previousRank = OperatorRank.fromXp(progress.totalXp)
-        val newTotalXp = progress.totalXp + xpAward.totalXpEarned
-        val newRank = OperatorRank.fromXp(newTotalXp)
-        val newRankProgressPercent = OperatorRank.progressPercent(newTotalXp)
-        val rankedUpTo = newRank.takeIf { it != previousRank }
-
-        val previousMastery = progress.itemMastery[targetCode] ?: ItemMastery()
-        val updatedMastery = ItemMastery(
-            attempts = previousMastery.attempts + 1,
-            correct = if (correct) previousMastery.correct + 1 else previousMastery.correct,
-            consecutiveCorrect = if (correct) previousMastery.consecutiveCorrect + 1 else 0
-        )
-        val updatedMasteryMap = progress.itemMastery + (targetCode to updatedMastery)
-
-        val effectiveDay = effectiveEpochDay(progress)
-        val (baseDayCount, activeDailyStreak) = resolveDailyBaseline(progress, effectiveDay)
-        val newDayAnsweredCount = baseDayCount + 1
-        val dailyGoalJustCompleted =
-            newDayAnsweredCount >= current.dailyGoalTarget && progress.lastGoalCompletedEpochDay != effectiveDay
-        val newDailyStreak = if (dailyGoalJustCompleted) {
-            if (progress.lastGoalCompletedEpochDay != null && effectiveDay - progress.lastGoalCompletedEpochDay == 1L) {
-                activeDailyStreak + 1
-            } else {
-                1
-            }
-        } else {
-            activeDailyStreak
-        }
-        val newLastGoalCompletedEpochDay = if (dailyGoalJustCompleted) {
-            effectiveDay
-        } else {
-            progress.lastGoalCompletedEpochDay
-        }
-
-        val updatedProgress = progress.copy(
-            totalXp = newTotalXp,
-            currentAnswerStreak = newAnswerStreak,
-            bestAnswerStreak = newBestStreak,
-            dailyStreak = newDailyStreak,
-            currentDayEpochDay = effectiveDay,
-            currentDayAnsweredCount = newDayAnsweredCount,
-            lastGoalCompletedEpochDay = newLastGoalCompletedEpochDay,
-            itemMastery = updatedMasteryMap
-        )
-
-        val (masteredInCategoryCount, totalInCategoryCount) =
-            categoryMasteryCounts(current.selectedCategory, updatedMasteryMap)
 
         _uiState.update { state ->
             if (state.selectedOption != null) {
                 state
             } else {
-                state.copy(
+                val roundUpdated = state.copy(
                     selectedOption = option,
                     isCorrect = correct,
                     revealedMeaning = state.currentEntry.meaning,
                     revealedMorsePattern = QsoCatalog.formatMorsePattern(targetCode),
-                    lastXpAward = xpAward,
-                    rankedUpTo = rankedUpTo,
-                    dailyGoalJustCompleted = dailyGoalJustCompleted,
+                    lastXpAward = transition.xpAward,
+                    rankedUpTo = transition.rankedUpTo,
+                    dailyGoalJustCompleted = transition.dailyGoalJustCompleted,
                     correctCount = if (correct) state.correctCount + 1 else state.correctCount,
-                    totalAnswered = state.totalAnswered + 1,
-                    streak = newAnswerStreak,
-                    bestStreak = newBestStreak,
-                    totalXp = newTotalXp,
-                    operatorRank = newRank,
-                    rankProgressPercent = newRankProgressPercent,
-                    dailyStreak = newDailyStreak,
-                    dailyAnsweredCount = newDayAnsweredCount,
-                    masteredInCategoryCount = masteredInCategoryCount,
-                    totalInCategoryCount = totalInCategoryCount
+                    totalAnswered = state.totalAnswered + 1
                 )
+                syncStateWithProgress(roundUpdated, transition.updatedProgress)
             }
         }
 
-        viewModelScope.launch(Dispatchers.Unconfined) {
-            trainerProgressRepository.updateProgress { updatedProgress }
+        val context = coroutineDispatcher ?: EmptyCoroutineContext
+        viewModelScope.launch(context) {
+            trainerProgressRepository.updateProgress { transition.updatedProgress }
         }
     }
 
@@ -241,10 +205,11 @@ class QsoTrainerViewModel @Inject constructor(
         current: QsoTrainerUiState,
         progress: TrainerProgress
     ): QsoTrainerUiState {
-        val (masteredInCategoryCount, totalInCategoryCount) =
-            categoryMasteryCounts(current.selectedCategory, progress.itemMastery)
-        val effectiveDay = effectiveEpochDay(progress)
-        val (dailyAnsweredCount, dailyStreak) = resolveDailyBaseline(progress, effectiveDay)
+        val categoryEntries = QsoCatalog.entriesForCategory(current.selectedCategory)
+        val masteredInCategoryCount = categoryEntries.count { item ->
+            progress.itemMastery[item.codeOrPhrase]?.isMastered == true
+        }
+        val todayEpochDay = LocalDate.now(clock).toEpochDay()
 
         return current.copy(
             streak = progress.currentAnswerStreak,
@@ -252,49 +217,11 @@ class QsoTrainerViewModel @Inject constructor(
             totalXp = progress.totalXp,
             operatorRank = OperatorRank.fromXp(progress.totalXp),
             rankProgressPercent = OperatorRank.progressPercent(progress.totalXp),
-            dailyStreak = dailyStreak,
-            dailyAnsweredCount = dailyAnsweredCount,
+            dailyStreak = progress.activeDailyStreakFor(todayEpochDay),
+            dailyAnsweredCount = progress.dailyAnsweredCountFor(todayEpochDay),
             masteredInCategoryCount = masteredInCategoryCount,
-            totalInCategoryCount = totalInCategoryCount
+            totalInCategoryCount = categoryEntries.size
         )
-    }
-
-    private fun effectiveEpochDay(progress: TrainerProgress): Long {
-        val todayEpochDay = LocalDate.now(clock).toEpochDay()
-        return if (progress.currentDayEpochDay != null && todayEpochDay < progress.currentDayEpochDay) {
-            progress.currentDayEpochDay
-        } else {
-            todayEpochDay
-        }
-    }
-
-    private fun resolveDailyBaseline(
-        progress: TrainerProgress,
-        effectiveDay: Long
-    ): Pair<Int, Int> {
-        val isNewCalendarDay = progress.currentDayEpochDay != effectiveDay
-        val dailyAnsweredCount = if (isNewCalendarDay) 0 else progress.currentDayAnsweredCount
-        val dailyStreak = if (
-            isNewCalendarDay &&
-            progress.lastGoalCompletedEpochDay != null &&
-            effectiveDay - progress.lastGoalCompletedEpochDay > 1L
-        ) {
-            0
-        } else {
-            progress.dailyStreak
-        }
-        return dailyAnsweredCount to dailyStreak
-    }
-
-    private fun categoryMasteryCounts(
-        category: QsoCategory,
-        masteryMap: Map<String, ItemMastery>
-    ): Pair<Int, Int> {
-        val categoryEntries = QsoCatalog.entriesForCategory(category)
-        val masteredCount = categoryEntries.count { item ->
-            masteryMap[item.codeOrPhrase]?.isMastered == true
-        }
-        return masteredCount to categoryEntries.size
     }
 
     companion object {
