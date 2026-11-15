@@ -160,7 +160,7 @@ fun PracticeTabContent(
                     selected = selectedCategory == category
                 ) {
                     Text(
-                        text = category.displayLabel(),
+                        text = category.displayName,
                         style = MaterialTheme.typography.labelLarge
                     )
                 }
@@ -192,7 +192,7 @@ fun PracticeTabContent(
                 }
 
                 LinearProgressIndicator(
-                    progress = { (uiModel.rankProgressPercent / 100f).coerceIn(0f, 1f) },
+                    progress = { uiModel.stats.rankProgressFraction },
                     modifier = Modifier
                         .fillMaxWidth()
                         .height(8.dp)
@@ -737,7 +737,7 @@ private fun MasteryAndWeakItemsCard(
                 onClick = { onPracticeCategory(stats.recommendedCategory) },
                 modifier = Modifier.fillMaxWidth()
             ) {
-                Text("Practice Weakest Category (${stats.recommendedCategory.displayLabel()})")
+                Text("Practice Weakest Category (${stats.recommendedCategory.displayName})")
             }
 
             HorizontalDivider()
@@ -856,10 +856,4 @@ private fun WeakItemRow(
             }
         }
     }
-}
-
-private fun QsoCategory.displayLabel(): String = when (this) {
-    QsoCategory.SINGLE_CODES -> "Single Codes"
-    QsoCategory.FULL_PHRASES -> "Full Phrases"
-    QsoCategory.MIXED -> "Mixed"
 }

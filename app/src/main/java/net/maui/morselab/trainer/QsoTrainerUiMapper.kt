@@ -145,12 +145,12 @@ object QsoTrainerUiMapper {
 
         val singleCodesMastery = buildCategoryMastery(
             category = QsoCategory.SINGLE_CODES,
-            title = "Single Codes",
+            title = QsoCategory.SINGLE_CODES.displayName,
             itemMastery = state.itemMastery
         )
         val fullPhrasesMastery = buildCategoryMastery(
             category = QsoCategory.FULL_PHRASES,
-            title = "Full Phrases",
+            title = QsoCategory.FULL_PHRASES.displayName,
             itemMastery = state.itemMastery
         )
 
