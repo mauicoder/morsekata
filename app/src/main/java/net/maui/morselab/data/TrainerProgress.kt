@@ -42,7 +42,7 @@ data class TrainerProgress(
 
     fun dailyAnsweredCountFor(todayEpochDay: Long): Int {
         val effectiveDay = effectiveEpochDay(todayEpochDay)
-        return if (currentDayEpochDay != effectiveDay) 0 else currentDayAnsweredCount
+        return dailyCountOn(effectiveDay, todayEpochDay)
     }
 
     fun activeDailyStreakFor(todayEpochDay: Long): Int {

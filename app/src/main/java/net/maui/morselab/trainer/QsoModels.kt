@@ -7,10 +7,10 @@ enum class QsoEntryType {
     FULL_PHRASE
 }
 
-enum class QsoCategory {
-    SINGLE_CODES,
-    FULL_PHRASES,
-    MIXED
+enum class QsoCategory(val displayName: String) {
+    SINGLE_CODES("Single Codes"),
+    FULL_PHRASES("Full Phrases"),
+    MIXED("Mixed")
 }
 
 data class QsoEntry(
