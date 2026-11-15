@@ -1,5 +1,6 @@
 package net.maui.morselab.trainer
 
+import net.maui.morselab.utils.MorseCodeMaps
 import kotlin.random.Random
 
 object QsoCatalog {
@@ -89,5 +90,54 @@ object QsoCatalog {
             .take(3)
             .map { it.codeOrPhrase }
         return (distractors + target.codeOrPhrase).shuffled(random)
+    }
+
+    fun entryWeight(mastery: ItemMastery?): Int {
+        if (mastery == null || mastery.attempts == 0) return 3 // Unseen
+        if (mastery.consecutiveCorrect == 0) return 4 // Missed
+        if (mastery.consecutiveCorrect in 1..2) return 2 // In Progress
+        return 1 // Mastered (consecutiveCorrect >= 3)
+    }
+
+    fun selectAdaptiveEntry(
+        category: QsoCategory,
+        masteryMap: Map<String, ItemMastery> = emptyMap(),
+        exclude: QsoEntry? = null,
+        random: Random = Random.Default
+    ): QsoEntry {
+        val pool = entriesForCategory(category)
+        val candidates = if (exclude != null && pool.size > 1) {
+            pool.filter { it != exclude }.ifEmpty { pool }
+        } else {
+            pool
+        }
+        if (candidates.isEmpty()) {
+            return pool.firstOrNull() ?: entries.first()
+        }
+
+        val weights = candidates.map { entryWeight(masteryMap[it.codeOrPhrase]) }
+        val totalWeight = weights.sum()
+        if (totalWeight <= 0) {
+            return candidates.random(random)
+        }
+
+        val roll = random.nextInt(totalWeight)
+        var cumulative = 0
+        for ((index, weight) in weights.withIndex()) {
+            cumulative += weight
+            if (roll < cumulative) {
+                return candidates[index]
+            }
+        }
+        return candidates.last()
+    }
+
+    fun formatMorsePattern(codeOrPhrase: String): String {
+        val words = codeOrPhrase.trim().split(Regex("\\s+"))
+        return words.joinToString(" / ") { word ->
+            word.mapNotNull { char ->
+                MorseCodeMaps.asciiToMorse[char.uppercaseChar()]
+            }.joinToString(" ")
+        }
     }
 }

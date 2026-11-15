@@ -9,5 +9,19 @@ data class QsoTrainerUiState(
     val revealedMeaning: String? = null,
     val correctCount: Int = 0,
     val totalAnswered: Int = 0,
-    val streak: Int = 0
+    val streak: Int = 0,
+    val revealedMorsePattern: String? = null,
+    val replayCount: Int = 0,
+    val lastXpAward: XpAward? = null,
+    val rankedUpTo: OperatorRank? = null,
+    val dailyGoalJustCompleted: Boolean = false,
+    val bestStreak: Int = 0,
+    val totalXp: Int = 0,
+    val operatorRank: OperatorRank = OperatorRank.SWL,
+    val rankProgressPercent: Int = 0,
+    val dailyStreak: Int = 0,
+    val dailyAnsweredCount: Int = 0,
+    val dailyGoalTarget: Int = 5,
+    val masteredInCategoryCount: Int = 0,
+    val totalInCategoryCount: Int = 0
 )
