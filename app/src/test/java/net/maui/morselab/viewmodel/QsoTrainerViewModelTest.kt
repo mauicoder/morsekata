@@ -14,6 +14,7 @@ import net.maui.morselab.trainer.OperatorRank
 import net.maui.morselab.trainer.QsoCatalog
 import net.maui.morselab.trainer.QsoCategory
 import net.maui.morselab.trainer.QsoEntryType
+import net.maui.morselab.trainer.QsoTrainerTab
 import net.maui.morselab.trainer.QsoTrainerUiState
 import net.maui.morselab.trainer.XpAward
 import org.junit.Assert.assertEquals
@@ -454,6 +455,122 @@ class QsoTrainerViewModelTest {
         assertEquals(1, fakeAudioPlayer.stopCallCount)
         viewModel.stopAudio()
         assertEquals(2, fakeAudioPlayer.stopCallCount)
+    }
+
+    @Test
+    fun `selectTab switches between PRACTICE and STATS and preserves tab across progress updates and category changes`() = runBlocking {
+        val today = LocalDate.of(2026, 11, 15).toEpochDay()
+        assertEquals(QsoTrainerTab.PRACTICE, viewModel.uiState.value.selectedTab)
+        assertEquals(today, viewModel.uiState.value.todayEpochDay)
+
+        viewModel.selectTab(QsoTrainerTab.STATS)
+        assertEquals(QsoTrainerTab.STATS, viewModel.uiState.value.selectedTab)
+
+        // Progress updates should sync dailyHistory, itemMastery, and todayEpochDay while preserving selectedTab
+        val masteryMap = mapOf("QTH" to ItemMastery(attempts = 2, correct = 1, consecutiveCorrect = 1))
+        val historyMap = mapOf(today to 3)
+        fakeProgressRepository.updateProgress {
+            it.copy(
+                totalXp = 120,
+                currentDayEpochDay = today,
+                currentDayAnsweredCount = 3,
+                dailyHistory = historyMap,
+                itemMastery = masteryMap
+            )
+        }
+        assertEquals(QsoTrainerTab.STATS, viewModel.uiState.value.selectedTab)
+        assertEquals(historyMap, viewModel.uiState.value.dailyHistory)
+        assertEquals(masteryMap, viewModel.uiState.value.itemMastery)
+        assertEquals(today, viewModel.uiState.value.todayEpochDay)
+
+        // Category change should also preserve selectedTab
+        viewModel.selectCategory(QsoCategory.FULL_PHRASES)
+        assertEquals(QsoCategory.FULL_PHRASES, viewModel.uiState.value.selectedCategory)
+        assertEquals(QsoTrainerTab.STATS, viewModel.uiState.value.selectedTab)
+
+        viewModel.selectTab(QsoTrainerTab.PRACTICE)
+        assertEquals(QsoTrainerTab.PRACTICE, viewModel.uiState.value.selectedTab)
+    }
+
+    @Test
+    fun `practiceWeakestCategory selects target category and switches to PRACTICE tab`() {
+        viewModel.selectTab(QsoTrainerTab.STATS)
+        assertEquals(QsoTrainerTab.STATS, viewModel.uiState.value.selectedTab)
+        assertEquals(QsoCategory.SINGLE_CODES, viewModel.uiState.value.selectedCategory)
+
+        viewModel.practiceWeakestCategory(QsoCategory.FULL_PHRASES)
+
+        val state = viewModel.uiState.value
+        assertEquals(QsoCategory.FULL_PHRASES, state.selectedCategory)
+        assertEquals(QsoTrainerTab.PRACTICE, state.selectedTab)
+        assertEquals(QsoEntryType.FULL_PHRASE, state.currentEntry.type)
+    }
+
+    @Test
+    fun `previewItemAudio plays requested item with current UserPreferences without altering replayCount or quiz state`() = runBlocking {
+        fakePreferencesRepository.updateFrequency(620)
+        fakePreferencesRepository.updateWpm(22)
+        fakePreferencesRepository.updateFarnsworthWpm(16)
+
+        val stateBefore = viewModel.uiState.value
+        assertEquals(0, stateBefore.replayCount)
+
+        viewModel.previewItemAudio("QSL VIA BURO")
+
+        val stateAfter = viewModel.uiState.value
+        assertEquals(0, stateAfter.replayCount)
+        assertEquals(stateBefore.currentEntry, stateAfter.currentEntry)
+        assertEquals(stateBefore.options, stateAfter.options)
+        assertNull(stateAfter.selectedOption)
+        assertEquals(1, fakeAudioPlayer.playCalls.size)
+        assertEquals("QSL VIA BURO", fakeAudioPlayer.playCalls.last().first)
+        assertEquals(
+            UserPreferences(frequency = 620, wpm = 22, farnsworthWpm = 16),
+            fakeAudioPlayer.playCalls.last().second
+        )
+    }
+
+    @Test
+    fun `resetProgress stops audio clears persisted TrainerProgress and resets session counters while preserving category and tab`() {
+        viewModel.selectCategory(QsoCategory.FULL_PHRASES)
+        viewModel.selectTab(QsoTrainerTab.STATS)
+        val stopCallsBeforeAnswer = fakeAudioPlayer.stopCallCount
+
+        // Answer 2 questions to accumulate session score, XP, daily history, and mastery
+        val firstCorrect = viewModel.uiState.value.currentEntry.codeOrPhrase
+        viewModel.selectOption(firstCorrect)
+        viewModel.nextQuestion()
+        val secondCorrect = viewModel.uiState.value.currentEntry.codeOrPhrase
+        viewModel.selectOption(secondCorrect)
+
+        assertTrue(viewModel.uiState.value.totalXp > 0)
+        assertEquals(2, viewModel.uiState.value.correctCount)
+        assertEquals(2, viewModel.uiState.value.totalAnswered)
+        assertTrue(viewModel.uiState.value.dailyHistory.isNotEmpty())
+        assertTrue(viewModel.uiState.value.itemMastery.isNotEmpty())
+
+        viewModel.resetProgress()
+
+        assertEquals(stopCallsBeforeAnswer + 1, fakeAudioPlayer.stopCallCount)
+        assertEquals(TrainerProgress(), fakeProgressRepository.trainerProgress.value)
+
+        val resetState = viewModel.uiState.value
+        assertEquals(QsoCategory.FULL_PHRASES, resetState.selectedCategory)
+        assertEquals(QsoTrainerTab.STATS, resetState.selectedTab)
+        assertEquals(0, resetState.correctCount)
+        assertEquals(0, resetState.totalAnswered)
+        assertEquals(0, resetState.streak)
+        assertEquals(0, resetState.bestStreak)
+        assertEquals(0, resetState.totalXp)
+        assertEquals(OperatorRank.SWL, resetState.operatorRank)
+        assertEquals(0, resetState.rankProgressPercent)
+        assertEquals(0, resetState.dailyStreak)
+        assertEquals(0, resetState.dailyAnsweredCount)
+        assertEquals(0, resetState.masteredInCategoryCount)
+        assertTrue(resetState.dailyHistory.isEmpty())
+        assertTrue(resetState.itemMastery.isEmpty())
+        assertNull(resetState.selectedOption)
+        assertNull(resetState.isCorrect)
     }
 
     private class FakeUserPreferencesRepository(
