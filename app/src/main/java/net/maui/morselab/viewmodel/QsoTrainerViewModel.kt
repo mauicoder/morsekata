@@ -19,6 +19,7 @@ import net.maui.morselab.generator.MorseAudioPlayer
 import net.maui.morselab.trainer.OperatorRank
 import net.maui.morselab.trainer.QsoCatalog
 import net.maui.morselab.trainer.QsoCategory
+import net.maui.morselab.trainer.QsoTrainerTab
 import net.maui.morselab.trainer.QsoTrainerUiState
 import java.time.Clock
 import java.time.LocalDate
@@ -96,8 +97,45 @@ class QsoTrainerViewModel @Inject constructor(
     fun selectCategory(category: QsoCategory) {
         morseAudioPlayer.stop()
         val progress = trainerProgressRepository.trainerProgress.value
-        _uiState.update {
-            createInitialState(category = category, progress = progress)
+        _uiState.update { current ->
+            createInitialState(
+                category = category,
+                progress = progress,
+                selectedTab = current.selectedTab
+            )
+        }
+    }
+
+    fun selectTab(tab: QsoTrainerTab) {
+        _uiState.update { current ->
+            current.copy(selectedTab = tab)
+        }
+    }
+
+    fun practiceWeakestCategory(category: QsoCategory) {
+        selectCategory(category)
+        _uiState.update { current ->
+            current.copy(selectedTab = QsoTrainerTab.PRACTICE)
+        }
+    }
+
+    fun previewItemAudio(codeOrPhrase: String) {
+        morseAudioPlayer.play(codeOrPhrase, userPreferences.value)
+    }
+
+    fun resetProgress() {
+        morseAudioPlayer.stop()
+        val defaultProgress = TrainerProgress()
+        _uiState.update { current ->
+            createInitialState(
+                category = current.selectedCategory,
+                progress = defaultProgress,
+                selectedTab = current.selectedTab
+            )
+        }
+        val context = coroutineDispatcher ?: EmptyCoroutineContext
+        viewModelScope.launch(context) {
+            trainerProgressRepository.updateProgress { defaultProgress }
         }
     }
 
@@ -185,7 +223,8 @@ class QsoTrainerViewModel @Inject constructor(
 
     private fun createInitialState(
         category: QsoCategory,
-        progress: TrainerProgress
+        progress: TrainerProgress,
+        selectedTab: QsoTrainerTab = QsoTrainerTab.PRACTICE
     ): QsoTrainerUiState {
         val entry = QsoCatalog.selectAdaptiveEntry(
             category = category,
@@ -196,7 +235,8 @@ class QsoTrainerViewModel @Inject constructor(
             selectedCategory = category,
             currentEntry = entry,
             options = QsoCatalog.generateOptions(target = entry, random = random),
-            dailyGoalTarget = DAILY_GOAL_TARGET
+            dailyGoalTarget = DAILY_GOAL_TARGET,
+            selectedTab = selectedTab
         )
         return syncStateWithProgress(baseState, progress)
     }
@@ -210,6 +250,7 @@ class QsoTrainerViewModel @Inject constructor(
             progress.itemMastery[item.codeOrPhrase]?.isMastered == true
         }
         val todayEpochDay = LocalDate.now(clock).toEpochDay()
+        val effectiveTodayEpochDay = progress.effectiveEpochDay(todayEpochDay)
 
         return current.copy(
             streak = progress.currentAnswerStreak,
@@ -220,7 +261,10 @@ class QsoTrainerViewModel @Inject constructor(
             dailyStreak = progress.activeDailyStreakFor(todayEpochDay),
             dailyAnsweredCount = progress.dailyAnsweredCountFor(todayEpochDay),
             masteredInCategoryCount = masteredInCategoryCount,
-            totalInCategoryCount = categoryEntries.size
+            totalInCategoryCount = categoryEntries.size,
+            todayEpochDay = effectiveTodayEpochDay,
+            dailyHistory = progress.dailyHistory,
+            itemMastery = progress.itemMastery
         )
     }
 
