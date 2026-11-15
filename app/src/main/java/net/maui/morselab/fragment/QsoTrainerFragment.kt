@@ -67,6 +67,7 @@ class QsoTrainerFragment @Inject constructor() : Fragment() {
 
         optionButtons.forEach { button ->
             button.setOnClickListener {
+                button.performHapticFeedback(android.view.HapticFeedbackConstants.VIRTUAL_KEY)
                 viewModel.selectOption(button.text.toString())
             }
         }
@@ -98,7 +99,13 @@ class QsoTrainerFragment @Inject constructor() : Fragment() {
 
         binding.textViewScore.text = uiModel.scoreText
         binding.textViewStreak.text = uiModel.streakText
+        binding.textViewRank.text = uiModel.rankText
+        binding.textViewXp.text = uiModel.xpText
+        binding.progressBarRank.progress = uiModel.rankProgressPercent
+        binding.textViewDailyStreak.text = uiModel.dailyStreakText
+        binding.textViewMastery.text = uiModel.masteryText
         binding.textViewFeedback.text = uiModel.feedbackText
+        binding.textViewMorsePattern.text = uiModel.morsePatternText
         binding.textViewMeaning.text = uiModel.meaningText
         binding.buttonNext.isEnabled = uiModel.isNextEnabled
 
