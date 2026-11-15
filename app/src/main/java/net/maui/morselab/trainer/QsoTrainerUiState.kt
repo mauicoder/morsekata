@@ -23,5 +23,9 @@ data class QsoTrainerUiState(
     val dailyAnsweredCount: Int = 0,
     val dailyGoalTarget: Int = 5,
     val masteredInCategoryCount: Int = 0,
-    val totalInCategoryCount: Int = 0
+    val totalInCategoryCount: Int = 0,
+    val selectedTab: QsoTrainerTab = QsoTrainerTab.PRACTICE,
+    val todayEpochDay: Long = 0L,
+    val dailyHistory: Map<Long, Int> = emptyMap(),
+    val itemMastery: Map<String, ItemMastery> = emptyMap()
 )

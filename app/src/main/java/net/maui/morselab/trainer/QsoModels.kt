@@ -82,3 +82,62 @@ data class XpAward(
         }
     }
 }
+
+enum class QsoTrainerTab {
+    PRACTICE,
+    STATS
+}
+
+enum class DayActivityStatus {
+    GOAL_MET,
+    PRACTICED,
+    MISSED
+}
+
+data class DayStreakCell(
+    val epochDay: Long,
+    val dayLabel: String,
+    val answeredCount: Int,
+    val status: DayActivityStatus,
+    val isToday: Boolean
+)
+
+data class CategoryMasteryStat(
+    val category: QsoCategory,
+    val title: String,
+    val masteredCount: Int,
+    val totalCount: Int,
+    val progressFraction: Float
+)
+
+data class WeakItemStat(
+    val codeOrPhrase: String,
+    val meaning: String,
+    val morsePattern: String,
+    val attempts: Int,
+    val correct: Int,
+    val accuracyPercent: Int,
+    val consecutiveCorrect: Int
+)
+
+data class QsoStatsUiModel(
+    val dailyStreak: Int,
+    val todayAnsweredCount: Int,
+    val dailyGoalTarget: Int,
+    val todayGoalProgressFraction: Float,
+    val trailingSevenDays: List<DayStreakCell>,
+    val operatorRank: OperatorRank,
+    val totalXp: Int,
+    val rankProgressPercent: Int,
+    val rankProgressFraction: Float,
+    val xpToNextRankText: String,
+    val currentAnswerStreak: Int,
+    val bestAnswerStreak: Int,
+    val lifetimeAnswered: Int,
+    val lifetimeCorrect: Int,
+    val lifetimeAccuracyPercent: Int,
+    val singleCodesMastery: CategoryMasteryStat,
+    val fullPhrasesMastery: CategoryMasteryStat,
+    val recommendedCategory: QsoCategory,
+    val weakItems: List<WeakItemStat>
+)

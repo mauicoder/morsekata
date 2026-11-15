@@ -21,7 +21,8 @@ data class TrainerProgress(
     val currentDayEpochDay: Long? = null,
     val currentDayAnsweredCount: Int = 0,
     val lastGoalCompletedEpochDay: Long? = null,
-    val itemMastery: Map<String, ItemMastery> = emptyMap()
+    val itemMastery: Map<String, ItemMastery> = emptyMap(),
+    val dailyHistory: Map<Long, Int> = emptyMap()
 ) {
     fun effectiveEpochDay(todayEpochDay: Long): Long {
         return if (currentDayEpochDay != null && todayEpochDay < currentDayEpochDay) {
@@ -29,6 +30,14 @@ data class TrainerProgress(
         } else {
             todayEpochDay
         }
+    }
+
+    fun dailyCountOn(epochDay: Long, todayEpochDay: Long): Int {
+        val effectiveToday = effectiveEpochDay(todayEpochDay)
+        if (epochDay > effectiveToday) return 0
+        val fromHistory = dailyHistory[epochDay]
+        if (fromHistory != null) return fromHistory
+        return if (currentDayEpochDay == epochDay) currentDayAnsweredCount else 0
     }
 
     fun dailyAnsweredCountFor(todayEpochDay: Long): Int {
@@ -100,6 +109,19 @@ data class TrainerProgress(
             lastGoalCompletedEpochDay
         }
 
+        val minRetainedDay = effectiveDay - 13L
+        val seedHistory = if (
+            currentDayEpochDay != null &&
+            currentDayAnsweredCount > 0 &&
+            currentDayEpochDay !in dailyHistory
+        ) {
+            dailyHistory + (currentDayEpochDay to currentDayAnsweredCount)
+        } else {
+            dailyHistory
+        }
+        val updatedDailyHistory = (seedHistory + (effectiveDay to newDayAnsweredCount))
+            .filterKeys { it in minRetainedDay..effectiveDay }
+
         val updatedProgress = copy(
             totalXp = newTotalXp,
             currentAnswerStreak = newAnswerStreak,
@@ -108,7 +130,8 @@ data class TrainerProgress(
             currentDayEpochDay = effectiveDay,
             currentDayAnsweredCount = newDayAnsweredCount,
             lastGoalCompletedEpochDay = newLastGoalCompletedEpochDay,
-            itemMastery = updatedMasteryMap
+            itemMastery = updatedMasteryMap,
+            dailyHistory = updatedDailyHistory
         )
 
         return AnswerProgressTransition(
