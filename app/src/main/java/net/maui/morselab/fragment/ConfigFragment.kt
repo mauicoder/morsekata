@@ -1,60 +1,57 @@
 package net.maui.morselab.fragment
 
 import android.os.Bundle
-import android.util.Log
 import android.view.LayoutInflater
 import android.view.View
 import android.view.ViewGroup
+import androidx.compose.runtime.getValue
+import androidx.compose.ui.platform.ComposeView
+import androidx.compose.ui.platform.ViewCompositionStrategy
 import androidx.fragment.app.Fragment
 import androidx.fragment.app.activityViewModels
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dagger.hilt.android.AndroidEntryPoint
-import net.maui.morselab.databinding.FragmentConfigBinding
+import net.maui.morselab.ui.settings.SettingsScreen
+import net.maui.morselab.ui.theme.MorseLabTheme
 import net.maui.morselab.viewmodel.UserPreferencesViewModel
 import javax.inject.Inject
-
 
 @AndroidEntryPoint
 class ConfigFragment @Inject constructor() : Fragment() {
 
     private val viewModel: UserPreferencesViewModel by activityViewModels()
-    private var _binding: FragmentConfigBinding? = null
-    private val binding get() = _binding!!
-
-    override fun onDestroyView() {
-        super.onDestroyView()
-        _binding = null
-    }
 
     override fun onCreateView(
-        inflater: LayoutInflater, container: ViewGroup?,
+        inflater: LayoutInflater,
+        container: ViewGroup?,
         savedInstanceState: Bundle?
     ): View {
-        _binding = FragmentConfigBinding.inflate(inflater, container, false)
-        return binding.root
+        return ComposeView(requireContext()).apply {
+            setViewCompositionStrategy(ViewCompositionStrategy.DisposeOnViewTreeLifecycleDestroyed)
+            setContent {
+                MorseLabTheme {
+                    val preferences by viewModel.userPreferences.collectAsStateWithLifecycle()
+                    SettingsScreen(
+                        preferences = preferences,
+                        onFrequencyChange = viewModel::setFrequency,
+                        onIncreaseFrequency = viewModel::increaseFrequency,
+                        onDecreaseFrequency = viewModel::decreaseFrequency,
+                        onWpmChange = viewModel::setWpm,
+                        onIncreaseWpm = viewModel::increaseWpm,
+                        onDecreaseWpm = viewModel::decreaseWpm,
+                        onFarnsworthWpmChange = viewModel::setFarnsworthWpm,
+                        onIncreaseFarnsworthWpm = viewModel::increaseFarnsworthWpm,
+                        onDecreaseFarnsworthWpm = viewModel::decreaseFarnsworthWpm,
+                        onPlayTestAudio = viewModel::playTestAudio,
+                        onResetDefaults = viewModel::resetToDefaults
+                    )
+                }
+            }
+        }
     }
 
-    override fun onViewCreated(view: View, savedInstanceState: Bundle?) {
-        super.onViewCreated(view, savedInstanceState)
-
-        viewModel.wpmFlow.observe(viewLifecycleOwner) { value ->
-            Log.i("ConfigFragment", "wpm changed $value")
-            binding.textViewWPM.text = value.toString()
-        }
-        viewModel.farnsworthWpmFlow.observe(viewLifecycleOwner) { value ->
-            Log.i("ConfigFragment", "farnsworthWpmFlow changed $value")
-            binding.textViewFarnsworthWPM.text = value.toString()
-        }
-        viewModel.frequencyFlow.observe(viewLifecycleOwner) { value ->
-            Log.i("ConfigFragment", "frequencyFlow changed $value")
-            binding.textViewFrequency.text = value.toString()
-        }
-
-        // Button bindings
-        binding.buttonIncreaseWPM.setOnClickListener { viewModel.increaseWpm() }
-        binding.buttonDecreaseWPM.setOnClickListener { viewModel.decreaseWpm() }
-        binding.buttonIncreaseFrequency.setOnClickListener { viewModel.increaseFrequency() }
-        binding.buttonDecreaseFrequency.setOnClickListener { viewModel.decreaseFrequency() }
-        binding.buttonIncreaseFarnsworthWPM.setOnClickListener { viewModel.increaseFarnsworthWpm() }
-        binding.buttonDecreaseFarnsworthWPM.setOnClickListener { viewModel.decreaseFarnsworthWpm() }
+    override fun onStop() {
+        super.onStop()
+        viewModel.stopTestAudio()
     }
 }

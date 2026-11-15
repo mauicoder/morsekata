@@ -8,6 +8,7 @@ import net.maui.morselab.data.UserPreferences
 import net.maui.morselab.data.UserPreferencesRepository
 import net.maui.morselab.generator.MorseAudioPlayer
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertTrue
 import org.junit.Before
 import org.junit.Test
 
@@ -184,6 +185,14 @@ class UserPreferencesViewModelTest {
 
         assertEquals(stopCountBefore + 1, fakeAudioPlayer.stopCallCount)
         assertEquals(UserPreferences(frequency = 700, wpm = 20, farnsworthWpm = 20), viewModel.userPreferences.value)
+    }
+
+    @Test
+    fun `legacy LiveData properties frequencyFlow wpmFlow and farnsworthWpmFlow are removed`() {
+        val methodNames = UserPreferencesViewModel::class.java.declaredMethods.map { it.name }.toSet()
+        assertTrue("Expected getFrequencyFlow to be removed", "getFrequencyFlow" !in methodNames)
+        assertTrue("Expected getWpmFlow to be removed", "getWpmFlow" !in methodNames)
+        assertTrue("Expected getFarnsworthWpmFlow to be removed", "getFarnsworthWpmFlow" !in methodNames)
     }
 
     private class FakeUserPreferencesRepository(
