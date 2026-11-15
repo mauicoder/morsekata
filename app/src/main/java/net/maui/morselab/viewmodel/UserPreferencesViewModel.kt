@@ -45,9 +45,10 @@ class UserPreferencesViewModel @Inject constructor(
     }
 
     fun setFrequency(frequency: Int) {
-        val snapped = (((frequency + 25) / FREQUENCY_STEP) * FREQUENCY_STEP)
-            .coerceIn(MIN_FREQUENCY, MAX_FREQUENCY)
-        updateFrequency(snapped)
+        val snapped = UserPreferences.snapFrequency(frequency)
+        launchUpdate {
+            userPreferencesRepository.updateFrequency(snapped)
+        }
     }
 
     fun increaseWpm() {
@@ -59,11 +60,13 @@ class UserPreferencesViewModel @Inject constructor(
     }
 
     fun setWpm(wpm: Int) {
-        val newValue = wpm.coerceIn(MIN_WPM, MAX_WPM)
+        val newValue = UserPreferences.clampWpm(wpm)
         val shouldClampFarnsworth = userPreferences.value.farnsworthWpm > newValue
-        updateWpm(newValue)
-        if (shouldClampFarnsworth) {
-            updateFarnsworthWpm(newValue)
+        launchUpdate {
+            userPreferencesRepository.updateWpm(newValue)
+            if (shouldClampFarnsworth) {
+                userPreferencesRepository.updateFarnsworthWpm(newValue)
+            }
         }
     }
 
@@ -76,11 +79,13 @@ class UserPreferencesViewModel @Inject constructor(
     }
 
     fun setFarnsworthWpm(farnsworthWpm: Int) {
-        val newValue = farnsworthWpm.coerceIn(MIN_WPM, MAX_WPM)
+        val newValue = UserPreferences.clampWpm(farnsworthWpm)
         val shouldRaiseWpm = newValue > userPreferences.value.wpm
-        updateFarnsworthWpm(newValue)
-        if (shouldRaiseWpm) {
-            updateWpm(newValue)
+        launchUpdate {
+            userPreferencesRepository.updateFarnsworthWpm(newValue)
+            if (shouldRaiseWpm) {
+                userPreferencesRepository.updateWpm(newValue)
+            }
         }
     }
 
@@ -101,36 +106,8 @@ class UserPreferencesViewModel @Inject constructor(
         }
     }
 
-    private fun updateFrequency(frequency: Int) {
-        launchUpdate {
-            userPreferencesRepository.updateFrequency(frequency)
-        }
-    }
-
-    private fun updateWpm(wpm: Int) {
-        launchUpdate {
-            userPreferencesRepository.updateWpm(wpm)
-        }
-    }
-
-    private fun updateFarnsworthWpm(farnsworthWpm: Int) {
-        launchUpdate {
-            userPreferencesRepository.updateFarnsworthWpm(farnsworthWpm)
-        }
-    }
-
     private fun launchUpdate(block: suspend CoroutineScope.() -> Unit) {
-        val dispatcher = coroutineDispatcher
-        if (dispatcher != null) {
-            viewModelScope.launch(dispatcher, block = block)
-        } else {
-            try {
-                viewModelScope.launch(EmptyCoroutineContext, block = block)
-            } catch (_: IllegalStateException) {
-                coroutineDispatcher = Dispatchers.Unconfined
-                viewModelScope.launch(Dispatchers.Unconfined, block = block)
-            }
-        }
+        viewModelScope.launch(coroutineDispatcher ?: EmptyCoroutineContext, block = block)
     }
 
     companion object {
