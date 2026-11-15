@@ -1,15 +1,12 @@
 package net.maui.morselab.viewmodel
 
-import androidx.lifecycle.LiveData
 import androidx.lifecycle.ViewModel
-import androidx.lifecycle.asLiveData
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.flow.StateFlow
-import kotlinx.coroutines.flow.map
 import kotlinx.coroutines.launch
 import net.maui.morselab.data.UserPreferences
 import net.maui.morselab.data.UserPreferencesRepository
@@ -38,10 +35,6 @@ class UserPreferencesViewModel @Inject constructor(
 
     // Use the StateFlow directly from the repository
     val userPreferences: StateFlow<UserPreferences> = userPreferencesRepository.userPreferences
-
-    val frequencyFlow: LiveData<Int> by lazy { userPreferences.map { it.frequency }.asLiveData() }
-    val wpmFlow: LiveData<Int> by lazy { userPreferences.map { it.wpm }.asLiveData() }
-    val farnsworthWpmFlow: LiveData<Int> by lazy { userPreferences.map { it.farnsworthWpm }.asLiveData() }
 
     fun increaseFrequency() {
         setFrequency(userPreferences.value.frequency + FREQUENCY_STEP)
