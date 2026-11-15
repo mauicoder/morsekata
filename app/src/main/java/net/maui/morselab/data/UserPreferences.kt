@@ -18,5 +18,11 @@ data class UserPreferences(
         const val MIN_WPM = 5
         const val MAX_WPM = 50
         const val WPM_STEP = 1
+
+        fun snapFrequency(frequency: Int): Int =
+            (((frequency + (FREQUENCY_STEP / 2)) / FREQUENCY_STEP) * FREQUENCY_STEP)
+                .coerceIn(MIN_FREQUENCY, MAX_FREQUENCY)
+
+        fun clampWpm(wpm: Int): Int = wpm.coerceIn(MIN_WPM, MAX_WPM)
     }
 }
