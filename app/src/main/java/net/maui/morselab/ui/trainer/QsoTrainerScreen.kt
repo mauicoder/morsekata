@@ -8,6 +8,7 @@ import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
@@ -53,19 +54,31 @@ import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import net.maui.morselab.trainer.CategoryMasteryStat
 import net.maui.morselab.trainer.DayActivityStatus
 import net.maui.morselab.trainer.DayStreakCell
+import net.maui.morselab.trainer.FullQsoLogbookSummary
+import net.maui.morselab.trainer.FullQsoUiModel
 import net.maui.morselab.trainer.OperatorRank
 import net.maui.morselab.trainer.OptionHighlightState
 import net.maui.morselab.trainer.QsoCategory
+import net.maui.morselab.trainer.QsoEntry
+import net.maui.morselab.trainer.QsoEntryType
+import net.maui.morselab.trainer.QsoExchangeFieldType
+import net.maui.morselab.trainer.QsoExchangeGenerator
+import net.maui.morselab.trainer.QsoFieldPresentation
+import net.maui.morselab.trainer.QsoStage
 import net.maui.morselab.trainer.QsoStatsUiModel
 import net.maui.morselab.trainer.QsoTrainerTab
 import net.maui.morselab.trainer.QsoTrainerUiMapper
 import net.maui.morselab.trainer.QsoTrainerUiModel
 import net.maui.morselab.trainer.QsoTrainerUiState
 import net.maui.morselab.trainer.WeakItemStat
+import net.maui.morselab.ui.theme.MorseLabTheme
+import kotlin.random.Random
 
 private val CorrectGreen = Color(0xFF2E7D32)
 private val IncorrectRed = Color(0xFFC62828)
@@ -80,6 +93,10 @@ fun QsoTrainerScreen(
     onSelectOption: (String) -> Unit,
     onReplayAudio: () -> Unit,
     onNextQuestion: () -> Unit,
+    onSelectQsoFieldOption: (QsoExchangeFieldType, String) -> Unit,
+    onSubmitQsoStage: () -> Unit,
+    onNextQsoStage: () -> Unit,
+    onReplayQsoStageAudio: () -> Unit,
     onPracticeCategory: (QsoCategory) -> Unit,
     onPreviewAudio: (String) -> Unit,
     onResetProgress: () -> Unit,
@@ -96,12 +113,17 @@ fun QsoTrainerScreen(
                 Tab(
                     selected = uiModel.selectedTab == QsoTrainerTab.PRACTICE,
                     onClick = { onSelectTab(QsoTrainerTab.PRACTICE) },
-                    text = { Text("Practice") }
+                    text = { Text("Code Drill") }
+                )
+                Tab(
+                    selected = uiModel.selectedTab == QsoTrainerTab.FULL_QSO,
+                    onClick = { onSelectTab(QsoTrainerTab.FULL_QSO) },
+                    text = { Text("Full QSO") }
                 )
                 Tab(
                     selected = uiModel.selectedTab == QsoTrainerTab.STATS,
                     onClick = { onSelectTab(QsoTrainerTab.STATS) },
-                    text = { Text("Stats & Streaks") }
+                    text = { Text("Stats") }
                 )
             }
 
@@ -115,7 +137,13 @@ fun QsoTrainerScreen(
                     onReplayAudio = onReplayAudio,
                     onNextQuestion = onNextQuestion
                 )
-                QsoTrainerTab.FULL_QSO -> {}
+                QsoTrainerTab.FULL_QSO -> FullQsoTabContent(
+                    fullQso = uiModel.fullQso,
+                    onSelectQsoFieldOption = onSelectQsoFieldOption,
+                    onSubmitQsoStage = onSubmitQsoStage,
+                    onNextQsoStage = onNextQsoStage,
+                    onReplayQsoStageAudio = onReplayQsoStageAudio
+                )
                 QsoTrainerTab.STATS -> StatsAndStreaksTabContent(
                     stats = uiModel.stats,
                     onPracticeCategory = onPracticeCategory,
@@ -678,6 +706,12 @@ private fun LifetimePerformanceCard(stats: QsoStatsUiModel) {
                     modifier = Modifier.weight(1f)
                 )
             }
+
+            StatGridTile(
+                label = "Full QSOs Logged",
+                value = "${stats.completedFullQsoCount}",
+                modifier = Modifier.fillMaxWidth()
+            )
         }
     }
 }
@@ -855,6 +889,374 @@ private fun WeakItemRow(
                     color = MaterialTheme.colorScheme.primary
                 )
             }
+        }
+    }
+}
+
+
+@Composable
+fun FullQsoTabContent(
+    fullQso: FullQsoUiModel,
+    onSelectQsoFieldOption: (QsoExchangeFieldType, String) -> Unit,
+    onSubmitQsoStage: () -> Unit,
+    onNextQsoStage: () -> Unit,
+    onReplayQsoStageAudio: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val view = LocalView.current
+
+    Column(
+        modifier = modifier
+            .fillMaxSize()
+            .verticalScroll(rememberScrollState())
+            .padding(16.dp),
+        verticalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        StationLogbookCard(fullQso = fullQso)
+
+        Button(
+            onClick = onReplayQsoStageAudio,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Play / Replay Over")
+        }
+
+        if (fullQso.revealedTransmitText.isNotEmpty() || fullQso.revealedMorsePattern.isNotEmpty()) {
+            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+                Column(
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .padding(12.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Text(
+                        text = "Transmitted CW Over",
+                        style = MaterialTheme.typography.labelMedium,
+                        color = MaterialTheme.colorScheme.primary,
+                        fontWeight = FontWeight.SemiBold
+                    )
+                    if (fullQso.revealedTransmitText.isNotEmpty()) {
+                        Text(
+                            text = fullQso.revealedTransmitText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
+                        )
+                    }
+                    if (fullQso.revealedMorsePattern.isNotEmpty()) {
+                        Text(
+                            text = fullQso.revealedMorsePattern,
+                            style = MaterialTheme.typography.bodySmall,
+                            fontFamily = FontFamily.Monospace,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                    }
+                }
+            }
+        }
+
+        fullQso.fields.forEach { field ->
+            QsoFieldSelectionCard(
+                field = field,
+                areOptionsEnabled = fullQso.areFieldOptionsEnabled,
+                onSelectOption = { option ->
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    onSelectQsoFieldOption(field.fieldType, option)
+                }
+            )
+        }
+
+        Button(
+            onClick = onSubmitQsoStage,
+            enabled = fullQso.canSubmitStage,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text("Submit Over")
+        }
+
+        if (fullQso.feedbackText.isNotEmpty()) {
+            val isClean = fullQso.isStageCleanCopy == true
+            val bannerColor = if (isClean) {
+                CorrectGreen.copy(alpha = 0.14f)
+            } else {
+                PracticedAmber.copy(alpha = 0.16f)
+            }
+            val bannerTextColor = if (isClean) CorrectGreen else PracticedAmber
+            Surface(
+                modifier = Modifier.fillMaxWidth(),
+                shape = RoundedCornerShape(8.dp),
+                color = bannerColor
+            ) {
+                Text(
+                    text = fullQso.feedbackText,
+                    style = MaterialTheme.typography.bodyMedium,
+                    fontWeight = FontWeight.SemiBold,
+                    color = bannerTextColor,
+                    textAlign = TextAlign.Center,
+                    modifier = Modifier.padding(12.dp)
+                )
+            }
+        }
+
+        OutlinedButton(
+            onClick = onNextQsoStage,
+            enabled = fullQso.isNextStageEnabled,
+            modifier = Modifier.fillMaxWidth()
+        ) {
+            Text(fullQso.nextActionLabel)
+        }
+    }
+}
+
+@Composable
+private fun StationLogbookCard(fullQso: FullQsoUiModel) {
+    val logbook: FullQsoLogbookSummary = fullQso.logbook
+    ElevatedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(14.dp),
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Surface(
+                    shape = RoundedCornerShape(6.dp),
+                    color = MaterialTheme.colorScheme.primaryContainer
+                ) {
+                    Text(
+                        text = fullQso.stageTitle,
+                        style = MaterialTheme.typography.labelLarge,
+                        fontWeight = FontWeight.Bold,
+                        color = MaterialTheme.colorScheme.onPrimaryContainer,
+                        modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp)
+                    )
+                }
+                Text(
+                    text = "QSOs Logged: ${fullQso.completedFullQsoCount}",
+                    style = MaterialTheme.typography.labelLarge,
+                    fontWeight = FontWeight.SemiBold,
+                    color = MaterialTheme.colorScheme.primary
+                )
+            }
+
+            HorizontalDivider()
+
+            Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LogbookFieldCell("CALL", logbook.callsign, Modifier.weight(1f))
+                    LogbookFieldCell("RST", logbook.rst, Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LogbookFieldCell("QTH", logbook.qth, Modifier.weight(1f))
+                    LogbookFieldCell("OP", logbook.opName, Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LogbookFieldCell("COND", logbook.condition, Modifier.weight(1f))
+                    LogbookFieldCell("RIG", logbook.rig, Modifier.weight(1f))
+                }
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    LogbookFieldCell("PWR", logbook.power, Modifier.weight(1f))
+                    LogbookFieldCell("WX", logbook.weather, Modifier.weight(1f))
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun LogbookFieldCell(
+    label: String,
+    value: String,
+    modifier: Modifier = Modifier
+) {
+    val isPending = value == "—" || value == "???"
+    Surface(
+        modifier = modifier,
+        shape = RoundedCornerShape(6.dp),
+        color = MaterialTheme.colorScheme.surfaceVariant.copy(alpha = 0.5f)
+    ) {
+        Row(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 8.dp, vertical = 6.dp),
+            horizontalArrangement = Arrangement.SpaceBetween,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Text(
+                text = label,
+                style = MaterialTheme.typography.labelSmall,
+                fontWeight = FontWeight.Bold,
+                color = MaterialTheme.colorScheme.onSurfaceVariant
+            )
+            Spacer(modifier = Modifier.width(6.dp))
+            Text(
+                text = value,
+                style = MaterialTheme.typography.bodySmall,
+                fontFamily = FontFamily.Monospace,
+                fontWeight = if (isPending) FontWeight.Normal else FontWeight.SemiBold,
+                color = if (isPending) {
+                    MaterialTheme.colorScheme.onSurfaceVariant
+                } else {
+                    MaterialTheme.colorScheme.onSurface
+                },
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Composable
+private fun QsoFieldSelectionCard(
+    field: QsoFieldPresentation,
+    areOptionsEnabled: Boolean,
+    onSelectOption: (String) -> Unit
+) {
+    OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+        Column(
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(12.dp),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Text(
+                text = field.label,
+                style = MaterialTheme.typography.titleSmall,
+                fontWeight = FontWeight.SemiBold
+            )
+
+            field.options.chunked(2).forEach { rowOptions ->
+                Row(
+                    modifier = Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(8.dp)
+                ) {
+                    rowOptions.forEach { optionState ->
+                        QsoFieldOptionChip(
+                            text = optionState.text,
+                            isSelected = field.selectedOption == optionState.text,
+                            highlightState = optionState.highlightState,
+                            enabled = areOptionsEnabled,
+                            onClick = { onSelectOption(optionState.text) },
+                            modifier = Modifier.weight(1f)
+                        )
+                    }
+                }
+            }
+        }
+    }
+}
+
+@Composable
+private fun QsoFieldOptionChip(
+    text: String,
+    isSelected: Boolean,
+    highlightState: OptionHighlightState,
+    enabled: Boolean,
+    onClick: () -> Unit,
+    modifier: Modifier = Modifier
+) {
+    val highlightColor = when (highlightState) {
+        OptionHighlightState.CORRECT -> CorrectGreen
+        OptionHighlightState.INCORRECT -> IncorrectRed
+        OptionHighlightState.DEFAULT -> null
+    }
+
+    if (highlightColor != null) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = highlightColor,
+                contentColor = Color.White,
+                disabledContainerColor = highlightColor,
+                disabledContentColor = Color.White
+            ),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = modifier
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    } else if (isSelected) {
+        Button(
+            onClick = onClick,
+            enabled = enabled,
+            colors = ButtonDefaults.buttonColors(
+                containerColor = MaterialTheme.colorScheme.primaryContainer,
+                contentColor = MaterialTheme.colorScheme.onPrimaryContainer
+            ),
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = modifier
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                fontWeight = FontWeight.SemiBold,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    } else {
+        OutlinedButton(
+            onClick = onClick,
+            enabled = enabled,
+            contentPadding = PaddingValues(horizontal = 10.dp, vertical = 8.dp),
+            modifier = modifier
+        ) {
+            Text(
+                text = text,
+                style = MaterialTheme.typography.bodyMedium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
+        }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun FullQsoTabContentPreview() {
+    val session = QsoExchangeGenerator.generateSession(Random(7))
+    val previewState = QsoTrainerUiState(
+        currentEntry = QsoEntry("QTH", "My location is...", QsoEntryType.SINGLE_CODE),
+        options = listOf("QTH", "QSL", "QRZ", "QRM"),
+        completedFullQsoCount = 3,
+        fullQsoSession = session,
+        currentQsoStage = QsoStage.MAIN_EXCHANGE,
+        selectedQsoFieldOptions = mapOf(
+            QsoExchangeFieldType.RST to session.rst,
+            QsoExchangeFieldType.QTH to session.qth
+        )
+    )
+    val fullQso = QsoTrainerUiMapper.mapFullQso(previewState)
+    MorseLabTheme {
+        Surface(color = MaterialTheme.colorScheme.background) {
+            FullQsoTabContent(
+                fullQso = fullQso,
+                onSelectQsoFieldOption = { _, _ -> },
+                onSubmitQsoStage = {},
+                onNextQsoStage = {},
+                onReplayQsoStageAudio = {}
+            )
         }
     }
 }

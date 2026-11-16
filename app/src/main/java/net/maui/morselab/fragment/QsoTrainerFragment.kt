@@ -38,6 +38,10 @@ class QsoTrainerFragment @Inject constructor() : Fragment() {
                         onSelectOption = viewModel::selectOption,
                         onReplayAudio = viewModel::replayAudio,
                         onNextQuestion = viewModel::nextQuestion,
+                        onSelectQsoFieldOption = viewModel::selectQsoFieldOption,
+                        onSubmitQsoStage = viewModel::submitQsoStage,
+                        onNextQsoStage = viewModel::nextQsoStage,
+                        onReplayQsoStageAudio = viewModel::replayQsoStageAudio,
                         onPracticeCategory = viewModel::practiceWeakestCategory,
                         onPreviewAudio = viewModel::previewItemAudio,
                         onResetProgress = viewModel::resetProgress
