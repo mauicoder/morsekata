@@ -2,9 +2,11 @@ package net.maui.morselab.trainer
 
 import org.junit.Assert.assertEquals
 import org.junit.Assert.assertFalse
+import org.junit.Assert.assertNull
 import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.time.LocalDate
+import kotlin.random.Random
 
 class QsoTrainerUiMapperTest {
 
@@ -309,6 +311,235 @@ class QsoTrainerUiMapperTest {
         assertEquals(0, firstWeak.correct)
         assertEquals(0, firstWeak.accuracyPercent)
         assertEquals(0, firstWeak.consecutiveCorrect)
+    }
+
+    @Test
+    fun `mapFullQso progressively reveals logbook across stages and maps completedFullQsoCount in both fullQso and stats`() {
+        val session = QsoExchangeGenerator.generateSession(Random(7))
+        val baseState = QsoTrainerUiState(
+            currentEntry = sampleEntry,
+            options = sampleOptions,
+            completedFullQsoCount = 4,
+            fullQsoSession = session,
+            currentQsoStage = QsoStage.CQ_CALL,
+            isQsoStageSubmitted = false
+        )
+
+        // Stage 1 unsubmitted: callsign is "???", others are "—"
+        val stage1Unsubmitted = QsoTrainerUiMapper.map(baseState)
+        assertEquals(4, stage1Unsubmitted.stats.completedFullQsoCount)
+        assertEquals(4, stage1Unsubmitted.fullQso.completedFullQsoCount)
+        assertEquals(QsoStage.CQ_CALL, stage1Unsubmitted.fullQso.stage)
+        assertEquals("Stage 1/3: Calling CQ", stage1Unsubmitted.fullQso.stageTitle)
+        assertEquals("Next Over (Stage 2/3)", stage1Unsubmitted.fullQso.nextActionLabel)
+        assertEquals(
+            FullQsoLogbookSummary(
+                callsign = "???",
+                rst = "—",
+                qth = "—",
+                opName = "—",
+                condition = "—",
+                rig = "—",
+                power = "—",
+                weather = "—"
+            ),
+            stage1Unsubmitted.fullQso.logbook
+        )
+
+        // Stage 1 submitted: callsign revealed
+        val stage1Submitted = QsoTrainerUiMapper.mapFullQso(
+            baseState.copy(
+                selectedQsoFieldOptions = mapOf(QsoExchangeFieldType.CALLSIGN to session.dxCallsign),
+                isQsoStageSubmitted = true,
+                qsoStageXpAward = XpAward(baseXp = 5, streakBonusXp = 0, firstCopyBonusXp = 5)
+            )
+        )
+        assertEquals(session.dxCallsign, stage1Submitted.logbook.callsign)
+        assertEquals("—", stage1Submitted.logbook.rst)
+
+        // Stage 2 unsubmitted: callsign remains revealed, Stage 2 fields still "—"
+        val stage2Unsubmitted = QsoTrainerUiMapper.mapFullQso(
+            baseState.copy(
+                currentQsoStage = QsoStage.MAIN_EXCHANGE,
+                isQsoStageSubmitted = false
+            )
+        )
+        assertEquals("Stage 2/3: Main Exchange", stage2Unsubmitted.stageTitle)
+        assertEquals("Next Over (Stage 3/3)", stage2Unsubmitted.nextActionLabel)
+        assertEquals(session.dxCallsign, stage2Unsubmitted.logbook.callsign)
+        assertEquals("—", stage2Unsubmitted.logbook.rst)
+        assertEquals("—", stage2Unsubmitted.logbook.qth)
+        assertEquals("—", stage2Unsubmitted.logbook.opName)
+        assertEquals("—", stage2Unsubmitted.logbook.condition)
+
+        // Stage 2 submitted: callsign + rst, qth, opName, condition revealed; rig, power, weather still "—"
+        val stage2Submitted = QsoTrainerUiMapper.mapFullQso(
+            baseState.copy(
+                currentQsoStage = QsoStage.MAIN_EXCHANGE,
+                isQsoStageSubmitted = true
+            )
+        )
+        assertEquals(
+            FullQsoLogbookSummary(
+                callsign = session.dxCallsign,
+                rst = session.rst,
+                qth = session.qth,
+                opName = session.opName,
+                condition = session.condition,
+                rig = "—",
+                power = "—",
+                weather = "—"
+            ),
+            stage2Submitted.logbook
+        )
+
+        // Stage 3 unsubmitted: callsign + Stage 2 fields remain revealed, Stage 3 fields still "—"
+        val stage3Unsubmitted = QsoTrainerUiMapper.mapFullQso(
+            baseState.copy(
+                currentQsoStage = QsoStage.FINAL_SIGN_OFF,
+                isQsoStageSubmitted = false
+            )
+        )
+        assertEquals("Stage 3/3: Technical & 73", stage3Unsubmitted.stageTitle)
+        assertEquals("Start New QSO Contact", stage3Unsubmitted.nextActionLabel)
+        assertEquals(session.dxCallsign, stage3Unsubmitted.logbook.callsign)
+        assertEquals(session.rst, stage3Unsubmitted.logbook.rst)
+        assertEquals("—", stage3Unsubmitted.logbook.rig)
+
+        // Stage 3 submitted: all 8 fields revealed
+        val stage3Submitted = QsoTrainerUiMapper.mapFullQso(
+            baseState.copy(
+                currentQsoStage = QsoStage.FINAL_SIGN_OFF,
+                isQsoStageSubmitted = true
+            )
+        )
+        assertEquals(
+            FullQsoLogbookSummary(
+                callsign = session.dxCallsign,
+                rst = session.rst,
+                qth = session.qth,
+                opName = session.opName,
+                condition = session.condition,
+                rig = session.rig,
+                power = session.power,
+                weather = session.weather
+            ),
+            stage3Submitted.logbook
+        )
+    }
+
+    @Test
+    fun `mapFullQso maps field option highlights canSubmitStage revealed morse and clean vs partial feedback`() {
+        val session = QsoExchangeGenerator.generateSession(Random(11))
+        val stage2Challenge = session.stageChallenge(QsoStage.MAIN_EXCHANGE)
+        val rstChallenge = stage2Challenge.fields.first { it.fieldType == QsoExchangeFieldType.RST }
+        val qthChallenge = stage2Challenge.fields.first { it.fieldType == QsoExchangeFieldType.QTH }
+        val wrongQth = qthChallenge.options.first { it != qthChallenge.correctValue }
+
+        // Partially selected Stage 2 (only 2 of 4 fields selected) -> canSubmitStage is false
+        val partialSelectionState = QsoTrainerUiState(
+            currentEntry = sampleEntry,
+            options = sampleOptions,
+            fullQsoSession = session,
+            currentQsoStage = QsoStage.MAIN_EXCHANGE,
+            selectedQsoFieldOptions = mapOf(
+                QsoExchangeFieldType.RST to rstChallenge.correctValue,
+                QsoExchangeFieldType.QTH to wrongQth
+            ),
+            isQsoStageSubmitted = false
+        )
+        val partialSelectionUi = QsoTrainerUiMapper.mapFullQso(partialSelectionState)
+        assertTrue(partialSelectionUi.areFieldOptionsEnabled)
+        assertFalse(partialSelectionUi.canSubmitStage)
+        assertFalse(partialSelectionUi.isNextStageEnabled)
+        assertNull(partialSelectionUi.isStageCleanCopy)
+        assertEquals("", partialSelectionUi.feedbackText)
+        assertEquals("", partialSelectionUi.revealedTransmitText)
+        assertEquals("", partialSelectionUi.revealedMorsePattern)
+        partialSelectionUi.fields.forEach { field ->
+            assertNull(field.isCorrect)
+            field.options.forEach { opt ->
+                assertEquals(OptionHighlightState.DEFAULT, opt.highlightState)
+            }
+        }
+
+        // All 4 fields selected (3 correct, 1 wrong) -> canSubmitStage is true before submission
+        val allSelectedOptions = mapOf(
+            QsoExchangeFieldType.RST to session.rst,
+            QsoExchangeFieldType.QTH to wrongQth,
+            QsoExchangeFieldType.OP_NAME to session.opName,
+            QsoExchangeFieldType.CONDITION to session.condition
+        )
+        val readyToSubmitUi = QsoTrainerUiMapper.mapFullQso(
+            partialSelectionState.copy(selectedQsoFieldOptions = allSelectedOptions)
+        )
+        assertTrue(readyToSubmitUi.canSubmitStage)
+        assertFalse(readyToSubmitUi.isNextStageEnabled)
+
+        // Submitted with 3/4 correct (partial copy)
+        val submittedPartialUi = QsoTrainerUiMapper.mapFullQso(
+            partialSelectionState.copy(
+                selectedQsoFieldOptions = allSelectedOptions,
+                isQsoStageSubmitted = true,
+                qsoStageXpAward = XpAward(baseXp = 15, streakBonusXp = 0, firstCopyBonusXp = 0),
+                qsoStageDailyGoalJustCompleted = true
+            )
+        )
+        assertFalse(submittedPartialUi.areFieldOptionsEnabled)
+        assertFalse(submittedPartialUi.canSubmitStage)
+        assertTrue(submittedPartialUi.isNextStageEnabled)
+        assertEquals(false, submittedPartialUi.isStageCleanCopy)
+        assertEquals(3, submittedPartialUi.correctFieldCount)
+        assertEquals(4, submittedPartialUi.totalFieldCount)
+        assertEquals(stage2Challenge.transmitText, submittedPartialUi.revealedTransmitText)
+        assertEquals(
+            QsoCatalog.formatMorsePattern(stage2Challenge.transmitText),
+            submittedPartialUi.revealedMorsePattern
+        )
+        assertTrue(submittedPartialUi.feedbackText.contains("Partial Copy (3/4 fields)"))
+        assertTrue(submittedPartialUi.feedbackText.contains("+15 XP"))
+        assertTrue(submittedPartialUi.feedbackText.contains("Daily Goal Complete!"))
+
+        val mappedRst = submittedPartialUi.fields.first { it.fieldType == QsoExchangeFieldType.RST }
+        assertEquals(true, mappedRst.isCorrect)
+        assertEquals(
+            OptionHighlightState.CORRECT,
+            mappedRst.options.first { it.text == session.rst }.highlightState
+        )
+
+        val mappedQth = submittedPartialUi.fields.first { it.fieldType == QsoExchangeFieldType.QTH }
+        assertEquals(false, mappedQth.isCorrect)
+        assertEquals(
+            OptionHighlightState.INCORRECT,
+            mappedQth.options.first { it.text == wrongQth }.highlightState
+        )
+        assertEquals(
+            OptionHighlightState.CORRECT,
+            mappedQth.options.first { it.text == session.qth }.highlightState
+        )
+
+        // Submitted Stage 3 with 3/3 clean copy, rank up, and +25 Full QSO Logged bonus
+        val stage3CleanOptions = mapOf(
+            QsoExchangeFieldType.RIG to session.rig,
+            QsoExchangeFieldType.POWER to session.power,
+            QsoExchangeFieldType.WEATHER to session.weather
+        )
+        val submittedStage3CleanUi = QsoTrainerUiMapper.mapFullQso(
+            partialSelectionState.copy(
+                currentQsoStage = QsoStage.FINAL_SIGN_OFF,
+                selectedQsoFieldOptions = stage3CleanOptions,
+                isQsoStageSubmitted = true,
+                qsoStageXpAward = XpAward(baseXp = 40, streakBonusXp = 4, firstCopyBonusXp = 5),
+                qsoStageRankedUpTo = OperatorRank.NOVICE
+            )
+        )
+        assertEquals(true, submittedStage3CleanUi.isStageCleanCopy)
+        assertEquals(3, submittedStage3CleanUi.correctFieldCount)
+        assertEquals(3, submittedStage3CleanUi.totalFieldCount)
+        assertTrue(submittedStage3CleanUi.feedbackText.contains("Clean Copy! (3/3 fields)"))
+        assertTrue(submittedStage3CleanUi.feedbackText.contains("+49 XP"))
+        assertTrue(submittedStage3CleanUi.feedbackText.contains("Full QSO Logged"))
+        assertTrue(submittedStage3CleanUi.feedbackText.contains("Rank Up: Novice!"))
     }
 }
 

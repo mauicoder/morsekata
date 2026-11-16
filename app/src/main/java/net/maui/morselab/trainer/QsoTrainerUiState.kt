@@ -1,5 +1,7 @@
 package net.maui.morselab.trainer
 
+import kotlin.random.Random
+
 data class QsoTrainerUiState(
     val selectedCategory: QsoCategory = QsoCategory.SINGLE_CODES,
     val currentEntry: QsoEntry,
@@ -27,5 +29,14 @@ data class QsoTrainerUiState(
     val selectedTab: QsoTrainerTab = QsoTrainerTab.PRACTICE,
     val todayEpochDay: Long = 0L,
     val dailyHistory: Map<Long, Int> = emptyMap(),
-    val itemMastery: Map<String, ItemMastery> = emptyMap()
+    val itemMastery: Map<String, ItemMastery> = emptyMap(),
+    val completedFullQsoCount: Int = 0,
+    val fullQsoSession: FullQsoSession = QsoExchangeGenerator.generateSession(Random(0)),
+    val currentQsoStage: QsoStage = QsoStage.CQ_CALL,
+    val selectedQsoFieldOptions: Map<QsoExchangeFieldType, String> = emptyMap(),
+    val isQsoStageSubmitted: Boolean = false,
+    val qsoStageReplayCount: Int = 0,
+    val qsoStageXpAward: XpAward? = null,
+    val qsoStageRankedUpTo: OperatorRank? = null,
+    val qsoStageDailyGoalJustCompleted: Boolean = false
 )

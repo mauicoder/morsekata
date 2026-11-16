@@ -19,6 +19,9 @@ import net.maui.morselab.generator.MorseAudioPlayer
 import net.maui.morselab.trainer.OperatorRank
 import net.maui.morselab.trainer.QsoCatalog
 import net.maui.morselab.trainer.QsoCategory
+import net.maui.morselab.trainer.QsoExchangeFieldType
+import net.maui.morselab.trainer.QsoExchangeGenerator
+import net.maui.morselab.trainer.QsoStage
 import net.maui.morselab.trainer.QsoTrainerTab
 import net.maui.morselab.trainer.QsoTrainerUiState
 import java.time.Clock
@@ -221,6 +224,106 @@ class QsoTrainerViewModel @Inject constructor(
         morseAudioPlayer.stop()
     }
 
+    fun selectQsoFieldOption(fieldType: QsoExchangeFieldType, option: String) {
+        _uiState.update { current ->
+            val stageFields = current.fullQsoSession.stageChallenge(current.currentQsoStage).fields
+            if (current.isQsoStageSubmitted || stageFields.none { it.fieldType == fieldType }) {
+                current
+            } else {
+                current.copy(
+                    selectedQsoFieldOptions = current.selectedQsoFieldOptions + (fieldType to option)
+                )
+            }
+        }
+    }
+
+    fun submitQsoStage() {
+        val current = _uiState.value
+        if (current.isQsoStageSubmitted) return
+
+        val activeStage = current.fullQsoSession.stageChallenge(current.currentQsoStage)
+        if (!activeStage.fields.all { it.fieldType in current.selectedQsoFieldOptions }) return
+
+        val correctFieldCount = activeStage.fields.count {
+            current.selectedQsoFieldOptions[it.fieldType] == it.correctValue
+        }
+        val totalFieldCount = activeStage.fields.size
+        val isFinalStage = current.currentQsoStage == QsoStage.FINAL_SIGN_OFF
+        val todayEpochDay = LocalDate.now(clock).toEpochDay()
+        val progress = trainerProgressRepository.trainerProgress.value
+
+        val transition = progress.recordFullQsoStage(
+            correctFieldCount = correctFieldCount,
+            totalFieldCount = totalFieldCount,
+            preStageReplayCount = current.qsoStageReplayCount,
+            isFinalStage = isFinalStage,
+            todayEpochDay = todayEpochDay,
+            dailyGoalTarget = current.dailyGoalTarget
+        )
+
+        _uiState.update { state ->
+            if (state.isQsoStageSubmitted) {
+                state
+            } else {
+                val stageUpdated = state.copy(
+                    isQsoStageSubmitted = true,
+                    qsoStageXpAward = transition.xpAward,
+                    qsoStageRankedUpTo = transition.rankedUpTo,
+                    qsoStageDailyGoalJustCompleted = transition.dailyGoalJustCompleted
+                )
+                syncStateWithProgress(stageUpdated, transition.updatedProgress)
+            }
+        }
+
+        val context = coroutineDispatcher ?: EmptyCoroutineContext
+        viewModelScope.launch(context) {
+            trainerProgressRepository.updateProgress { transition.updatedProgress }
+        }
+    }
+
+    fun nextQsoStage() {
+        if (!_uiState.value.isQsoStageSubmitted) return
+
+        val nextState = _uiState.updateAndGet { current ->
+            if (!current.isQsoStageSubmitted) {
+                current
+            } else {
+                val (nextSession, nextStage) = when (current.currentQsoStage) {
+                    QsoStage.CQ_CALL -> current.fullQsoSession to QsoStage.MAIN_EXCHANGE
+                    QsoStage.MAIN_EXCHANGE -> current.fullQsoSession to QsoStage.FINAL_SIGN_OFF
+                    QsoStage.FINAL_SIGN_OFF -> QsoExchangeGenerator.generateSession(
+                        random = random,
+                        excludeCallsign = current.fullQsoSession.dxCallsign
+                    ) to QsoStage.CQ_CALL
+                }
+                current.copy(
+                    fullQsoSession = nextSession,
+                    currentQsoStage = nextStage,
+                    selectedQsoFieldOptions = emptyMap(),
+                    isQsoStageSubmitted = false,
+                    qsoStageReplayCount = 0,
+                    qsoStageXpAward = null,
+                    qsoStageRankedUpTo = null,
+                    qsoStageDailyGoalJustCompleted = false
+                )
+            }
+        }
+        val transmitText = nextState.fullQsoSession.stageChallenge(nextState.currentQsoStage).transmitText
+        morseAudioPlayer.play(transmitText, userPreferences.value)
+    }
+
+    fun replayQsoStageAudio() {
+        val state = _uiState.updateAndGet { current ->
+            if (!current.isQsoStageSubmitted) {
+                current.copy(qsoStageReplayCount = current.qsoStageReplayCount + 1)
+            } else {
+                current
+            }
+        }
+        val transmitText = state.fullQsoSession.stageChallenge(state.currentQsoStage).transmitText
+        morseAudioPlayer.play(transmitText, userPreferences.value)
+    }
+
     private fun createInitialState(
         category: QsoCategory,
         progress: TrainerProgress,
@@ -236,7 +339,8 @@ class QsoTrainerViewModel @Inject constructor(
             currentEntry = entry,
             options = QsoCatalog.generateOptions(target = entry, random = random),
             dailyGoalTarget = DAILY_GOAL_TARGET,
-            selectedTab = selectedTab
+            selectedTab = selectedTab,
+            fullQsoSession = QsoExchangeGenerator.generateSession(random = random)
         )
         return syncStateWithProgress(baseState, progress)
     }
@@ -264,7 +368,8 @@ class QsoTrainerViewModel @Inject constructor(
             totalInCategoryCount = categoryEntries.size,
             todayEpochDay = effectiveTodayEpochDay,
             dailyHistory = progress.dailyHistory,
-            itemMastery = progress.itemMastery
+            itemMastery = progress.itemMastery,
+            completedFullQsoCount = progress.completedFullQsoCount
         )
     }
 
