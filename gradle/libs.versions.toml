@@ -1,6 +1,6 @@
 [versions]
 # Plugin Versions
-androidApplication = "9.5.1"
+androidApplication = "9.5.2"
 kotlin = "2.3.21"
 kotlinx-serialization = "1.11.0"
 ksp = "2.3.7"
