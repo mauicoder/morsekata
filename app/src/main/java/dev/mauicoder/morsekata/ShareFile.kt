@@ -4,7 +4,6 @@ import android.content.Context
 import android.content.Intent
 import androidx.core.content.FileProvider
 import java.io.File
-import java.io.PrintWriter
 
 class ShareFile {
 
@@ -14,7 +13,7 @@ class ShareFile {
     fun shareAsFile(context: Context, waveStream: ByteArray) {
         val file = File(context.cacheDir, FILE_PROVIDER_NAME)
 
-        file.updateText(waveStream)
+        file.writeBytes(waveStream)
 
         val uri = FileProvider.getUriForFile(
             context.applicationContext,
@@ -35,17 +34,4 @@ class ShareFile {
             )
         }
     }
-
-    private fun File.clearText() {
-        PrintWriter(this).also {
-            it.print("")
-            it.close()
-        }
-    }
-
-    private fun File.updateText(content: ByteArray) {
-        clearText()
-        appendBytes(content)
-    }
-
 }

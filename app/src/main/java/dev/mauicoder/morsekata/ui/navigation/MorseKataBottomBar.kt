@@ -66,13 +66,10 @@ fun MorseKataBottomBar(
         currentDestination = currentDestination,
         showExperimentalFeatures = showExperimentalFeatures,
         onNavigateToItem = { item ->
-            navController.navigate(item.route) {
-                popUpTo(navController.graph.findStartDestination().id) {
-                    saveState = true
-                }
-                launchSingleTop = true
-                restoreState = true
-            }
+            navController.navigate(
+                item.route,
+                bottomNavOptions(navController.graph.findStartDestination().id)
+            )
         },
         modifier = modifier
     )
