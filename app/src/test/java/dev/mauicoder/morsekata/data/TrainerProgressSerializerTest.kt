@@ -3,8 +3,11 @@ package dev.mauicoder.morsekata.data
 import androidx.datastore.core.CorruptionException
 import kotlinx.coroutines.runBlocking
 import dev.mauicoder.morsekata.trainer.ItemMastery
+import dev.mauicoder.morsekata.trainer.OperatorRank
 import org.junit.Assert.assertEquals
+import org.junit.Assert.assertFalse
 import org.junit.Assert.assertNull
+import org.junit.Assert.assertTrue
 import org.junit.Test
 import java.io.ByteArrayInputStream
 import java.io.ByteArrayOutputStream
@@ -23,6 +26,7 @@ class TrainerProgressSerializerTest {
         assertNull(defaultProgress.lastGoalCompletedEpochDay)
         assertEquals(emptyMap<String, ItemMastery>(), defaultProgress.itemMastery)
         assertEquals(emptyMap<Long, Int>(), defaultProgress.dailyHistory)
+        assertEquals(0, defaultProgress.completedFullQsoCount)
     }
 
     @Test
@@ -36,7 +40,8 @@ class TrainerProgressSerializerTest {
             currentDayAnsweredCount = 10,
             lastGoalCompletedEpochDay = 19999L,
             itemMastery = mapOf("QTH" to ItemMastery(attempts = 4, correct = 3, consecutiveCorrect = 2)),
-            dailyHistory = mapOf(19999L to 6, 20000L to 10)
+            dailyHistory = mapOf(19999L to 6, 20000L to 10),
+            completedFullQsoCount = 4
         )
 
         val output = ByteArrayOutputStream()
@@ -127,5 +132,92 @@ class TrainerProgressSerializerTest {
     fun `readFrom throws CorruptionException on malformed JSON`(): Unit = runBlocking {
         val corruptedInput = ByteArrayInputStream("{ invalid json".encodeToByteArray())
         TrainerProgressSerializer.readFrom(corruptedInput)
+    }
+
+    @Test
+    fun `recordFullQsoStage awards field XP, streak bonus, first-copy bonus, and final stage bonus on clean copy`() {
+        val initial = TrainerProgress(
+            totalXp = 80,
+            currentAnswerStreak = 2,
+            bestAnswerStreak = 2,
+            currentDayEpochDay = 200L,
+            currentDayAnsweredCount = 4,
+            dailyHistory = mapOf(200L to 4),
+            completedFullQsoCount = 1
+        )
+
+        val transition = initial.recordFullQsoStage(
+            correctFieldCount = 3,
+            totalFieldCount = 3,
+            preStageReplayCount = 0,
+            isFinalStage = true,
+            todayEpochDay = 200L,
+            dailyGoalTarget = 5
+        )
+
+        // 3 * 5 = 15 field XP + 25 final bonus = 40 base XP; newStreak = 3 -> (3-1)*2 = 4 streak XP; 0 replays -> 5 first-copy XP
+        assertEquals(40, transition.xpAward.baseXp)
+        assertEquals(4, transition.xpAward.streakBonusXp)
+        assertEquals(5, transition.xpAward.firstCopyBonusXp)
+        assertEquals(49, transition.xpAward.totalXpEarned)
+        assertEquals(OperatorRank.NOVICE, transition.rankedUpTo)
+        assertTrue(transition.dailyGoalJustCompleted)
+
+        val updated = transition.updatedProgress
+        assertEquals(129, updated.totalXp)
+        assertEquals(3, updated.currentAnswerStreak)
+        assertEquals(3, updated.bestAnswerStreak)
+        assertEquals(1, updated.dailyStreak)
+        assertEquals(5, updated.currentDayAnsweredCount)
+        assertEquals(5, updated.dailyHistory[200L])
+        assertEquals(2, updated.completedFullQsoCount)
+    }
+
+    @Test
+    fun `recordFullQsoStage resets answer streak on partial copy while still awarding partial field XP and final stage bonus`() {
+        val initial = TrainerProgress(
+            totalXp = 50,
+            currentAnswerStreak = 4,
+            bestAnswerStreak = 4,
+            currentDayEpochDay = 200L,
+            currentDayAnsweredCount = 1,
+            dailyHistory = mapOf(200L to 1),
+            completedFullQsoCount = 0
+        )
+
+        val stage2Transition = initial.recordFullQsoStage(
+            correctFieldCount = 2,
+            totalFieldCount = 4,
+            preStageReplayCount = 0,
+            isFinalStage = false,
+            todayEpochDay = 200L,
+            dailyGoalTarget = 5
+        )
+
+        assertEquals(10, stage2Transition.xpAward.baseXp)
+        assertEquals(0, stage2Transition.xpAward.streakBonusXp)
+        assertEquals(0, stage2Transition.xpAward.firstCopyBonusXp)
+        assertEquals(10, stage2Transition.xpAward.totalXpEarned)
+        assertFalse(stage2Transition.dailyGoalJustCompleted)
+        assertEquals(0, stage2Transition.updatedProgress.currentAnswerStreak)
+        assertEquals(4, stage2Transition.updatedProgress.bestAnswerStreak)
+        assertEquals(0, stage2Transition.updatedProgress.completedFullQsoCount)
+
+        val stage3Transition = stage2Transition.updatedProgress.recordFullQsoStage(
+            correctFieldCount = 1,
+            totalFieldCount = 3,
+            preStageReplayCount = 2,
+            isFinalStage = true,
+            todayEpochDay = 200L,
+            dailyGoalTarget = 5
+        )
+
+        // 1 * 5 + 25 final bonus = 30 base XP; partial copy -> 0 streak & 0 first-copy
+        assertEquals(30, stage3Transition.xpAward.baseXp)
+        assertEquals(0, stage3Transition.xpAward.streakBonusXp)
+        assertEquals(0, stage3Transition.xpAward.firstCopyBonusXp)
+        assertEquals(90, stage3Transition.updatedProgress.totalXp)
+        assertEquals(1, stage3Transition.updatedProgress.completedFullQsoCount)
+        assertEquals(3, stage3Transition.updatedProgress.currentDayAnsweredCount)
     }
 }

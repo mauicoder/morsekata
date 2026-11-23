@@ -3,17 +3,6 @@ package dev.mauicoder.morsekata.trainer
 import java.time.DayOfWeek
 import java.time.LocalDate
 
-enum class OptionHighlightState {
-    DEFAULT,
-    CORRECT,
-    INCORRECT
-}
-
-data class OptionPresentationState(
-    val text: String,
-    val highlightState: OptionHighlightState
-)
-
 data class QsoTrainerUiModel(
     val rankText: String,
     val xpText: String,
@@ -29,7 +18,8 @@ data class QsoTrainerUiModel(
     val meaningText: String,
     val optionStates: List<OptionPresentationState>,
     val selectedTab: QsoTrainerTab,
-    val stats: QsoStatsUiModel
+    val stats: QsoStatsUiModel,
+    val fullQso: FullQsoUiModel
 )
 
 object QsoTrainerUiMapper {
@@ -98,7 +88,119 @@ object QsoTrainerUiMapper {
             meaningText = meaningText,
             optionStates = optionStates,
             selectedTab = state.selectedTab,
-            stats = mapStats(state)
+            stats = mapStats(state),
+            fullQso = mapFullQso(state)
+        )
+    }
+
+    fun mapFullQso(state: QsoTrainerUiState): FullQsoUiModel {
+        val session = state.fullQsoSession
+        val stage = state.currentQsoStage
+        val isSubmitted = state.isQsoStageSubmitted
+        val activeStage = session.stageChallenge(stage)
+
+        val revealStage1 = stage != QsoStage.CQ_CALL || isSubmitted
+        val revealStage2 = stage == QsoStage.FINAL_SIGN_OFF || (stage == QsoStage.MAIN_EXCHANGE && isSubmitted)
+        val revealStage3 = stage == QsoStage.FINAL_SIGN_OFF && isSubmitted
+
+        val logbook = FullQsoLogbookSummary(
+            callsign = if (revealStage1) session.dxCallsign else "???",
+            rst = if (revealStage2) session.rst else "—",
+            qth = if (revealStage2) session.qth else "—",
+            opName = if (revealStage2) session.opName else "—",
+            condition = if (revealStage2) session.condition else "—",
+            rig = if (revealStage3) session.rig else "—",
+            power = if (revealStage3) session.power else "—",
+            weather = if (revealStage3) session.weather else "—"
+        )
+
+        val fields = activeStage.fields.map { challenge ->
+            val selectedOption = state.selectedQsoFieldOptions[challenge.fieldType]
+            val fieldCorrect = if (isSubmitted) selectedOption == challenge.correctValue else null
+            val optionStates = challenge.options.map { optionText ->
+                val highlight = when {
+                    !isSubmitted -> OptionHighlightState.DEFAULT
+                    optionText == challenge.correctValue -> OptionHighlightState.CORRECT
+                    optionText == selectedOption -> OptionHighlightState.INCORRECT
+                    else -> OptionHighlightState.DEFAULT
+                }
+                OptionPresentationState(text = optionText, highlightState = highlight)
+            }
+            QsoFieldPresentation(
+                fieldType = challenge.fieldType,
+                label = challenge.fieldType.label,
+                selectedOption = selectedOption,
+                correctValue = challenge.correctValue,
+                isCorrect = fieldCorrect,
+                options = optionStates
+            )
+        }
+
+        val totalFieldCount = activeStage.fields.size
+        val correctFieldCount = if (isSubmitted) {
+            activeStage.fields.count { state.selectedQsoFieldOptions[it.fieldType] == it.correctValue }
+        } else {
+            0
+        }
+        val isStageCleanCopy = if (isSubmitted) {
+            totalFieldCount > 0 && correctFieldCount == totalFieldCount
+        } else {
+            null
+        }
+
+        val nextActionLabel = when (stage) {
+            QsoStage.CQ_CALL -> "Next Over (Stage 2/3)"
+            QsoStage.MAIN_EXCHANGE -> "Next Over (Stage 3/3)"
+            QsoStage.FINAL_SIGN_OFF -> "Start New QSO Contact"
+        }
+
+        val feedbackText = if (isSubmitted) {
+            val cleanCopy = isStageCleanCopy == true
+            val copyHeader = if (cleanCopy) {
+                "Clean Copy! ($correctFieldCount/$totalFieldCount fields)"
+            } else {
+                "Partial Copy ($correctFieldCount/$totalFieldCount fields)"
+            }
+            val defaultBaseXp = correctFieldCount * 5 + if (stage == QsoStage.FINAL_SIGN_OFF) 25 else 0
+            val award = state.qsoStageXpAward ?: XpAward(defaultBaseXp, 0, 0)
+            val xpParts = mutableListOf("${correctFieldCount * 5} Field")
+            if (stage == QsoStage.FINAL_SIGN_OFF) {
+                xpParts.add("+25 Full QSO Logged")
+            }
+            if (award.streakBonusXp > 0) {
+                xpParts.add("${award.streakBonusXp} Streak")
+            }
+            if (award.firstCopyBonusXp > 0) {
+                xpParts.add("${award.firstCopyBonusXp} First-Copy")
+            }
+            var text = "$copyHeader • +${award.totalXpEarned} XP (${xpParts.joinToString(" + ")})"
+            if (state.qsoStageRankedUpTo != null) {
+                text += " • Rank Up: ${state.qsoStageRankedUpTo.displayName}!"
+            }
+            if (state.qsoStageDailyGoalJustCompleted) {
+                text += " • Daily Goal Complete!"
+            }
+            text
+        } else {
+            ""
+        }
+
+        return FullQsoUiModel(
+            stage = stage,
+            stageTitle = stage.title,
+            completedFullQsoCount = state.completedFullQsoCount,
+            logbook = logbook,
+            fields = fields,
+            areFieldOptionsEnabled = !isSubmitted,
+            canSubmitStage = !isSubmitted && activeStage.fields.all { it.fieldType in state.selectedQsoFieldOptions },
+            isNextStageEnabled = isSubmitted,
+            nextActionLabel = nextActionLabel,
+            isStageCleanCopy = isStageCleanCopy,
+            correctFieldCount = correctFieldCount,
+            totalFieldCount = totalFieldCount,
+            feedbackText = feedbackText,
+            revealedTransmitText = if (isSubmitted) activeStage.transmitText else "",
+            revealedMorsePattern = if (isSubmitted) QsoCatalog.formatMorsePattern(activeStage.transmitText) else ""
         )
     }
 
@@ -203,7 +305,8 @@ object QsoTrainerUiMapper {
             singleCodesMastery = singleCodesMastery,
             fullPhrasesMastery = fullPhrasesMastery,
             recommendedCategory = recommendedCategory,
-            weakItems = weakItems
+            weakItems = weakItems,
+            completedFullQsoCount = state.completedFullQsoCount
         )
     }
 

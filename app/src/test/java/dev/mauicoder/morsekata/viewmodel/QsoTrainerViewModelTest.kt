@@ -14,6 +14,8 @@ import dev.mauicoder.morsekata.trainer.OperatorRank
 import dev.mauicoder.morsekata.trainer.QsoCatalog
 import dev.mauicoder.morsekata.trainer.QsoCategory
 import dev.mauicoder.morsekata.trainer.QsoEntryType
+import dev.mauicoder.morsekata.trainer.QsoExchangeFieldType
+import dev.mauicoder.morsekata.trainer.QsoStage
 import dev.mauicoder.morsekata.trainer.QsoTrainerTab
 import dev.mauicoder.morsekata.trainer.QsoTrainerUiState
 import dev.mauicoder.morsekata.trainer.XpAward
@@ -571,6 +573,172 @@ class QsoTrainerViewModelTest {
         assertTrue(resetState.itemMastery.isEmpty())
         assertNull(resetState.selectedOption)
         assertNull(resetState.isCorrect)
+    }
+
+    @Test
+    fun `full QSO 3-stage clean copy workflow progresses through CQ_CALL MAIN_EXCHANGE and FINAL_SIGN_OFF logs contact and starts new QSO`() = runBlocking {
+        fakePreferencesRepository.updateFrequency(680)
+        fakePreferencesRepository.updateWpm(24)
+        fakePreferencesRepository.updateFarnsworthWpm(18)
+        val expectedPrefs = UserPreferences(frequency = 680, wpm = 24, farnsworthWpm = 18)
+
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        assertEquals(QsoTrainerTab.FULL_QSO, viewModel.uiState.value.selectedTab)
+
+        val firstSession = viewModel.uiState.value.fullQsoSession
+        assertEquals(QsoStage.CQ_CALL, viewModel.uiState.value.currentQsoStage)
+        assertEquals(0, viewModel.uiState.value.completedFullQsoCount)
+
+        // Ignoring field not in Stage 1 (e.g. RST) and premature submitQsoStage / nextQsoStage
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.RST, firstSession.rst)
+        assertTrue(viewModel.uiState.value.selectedQsoFieldOptions.isEmpty())
+        viewModel.submitQsoStage()
+        assertFalse(viewModel.uiState.value.isQsoStageSubmitted)
+        viewModel.nextQsoStage()
+        assertEquals(QsoStage.CQ_CALL, viewModel.uiState.value.currentQsoStage)
+
+        // Stage 1: select correct CALLSIGN and submit (1 field -> 5 base + 0 streak + 5 first-copy = 10 XP)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, firstSession.dxCallsign)
+        assertEquals(
+            mapOf(QsoExchangeFieldType.CALLSIGN to firstSession.dxCallsign),
+            viewModel.uiState.value.selectedQsoFieldOptions
+        )
+        viewModel.submitQsoStage()
+
+        val afterStage1 = viewModel.uiState.value
+        assertTrue(afterStage1.isQsoStageSubmitted)
+        assertEquals(XpAward(baseXp = 5, streakBonusXp = 0, firstCopyBonusXp = 5), afterStage1.qsoStageXpAward)
+        assertEquals(10, afterStage1.totalXp)
+        assertEquals(1, afterStage1.streak)
+        assertEquals(1, afterStage1.dailyAnsweredCount)
+        assertEquals(0, afterStage1.completedFullQsoCount)
+
+        // Selecting another option or re-submitting after submission is a no-op
+        val wrongCall = firstSession.stageChallenge(QsoStage.CQ_CALL).fields.first().options.first { it != firstSession.dxCallsign }
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, wrongCall)
+        assertEquals(firstSession.dxCallsign, viewModel.uiState.value.selectedQsoFieldOptions[QsoExchangeFieldType.CALLSIGN])
+        viewModel.submitQsoStage()
+        assertEquals(10, viewModel.uiState.value.totalXp)
+
+        // Advance to Stage 2 (MAIN_EXCHANGE) -> plays Stage 2 transmitText
+        val playsBeforeStage2 = fakeAudioPlayer.playCalls.size
+        viewModel.nextQsoStage()
+        val stage2State = viewModel.uiState.value
+        assertEquals(QsoStage.MAIN_EXCHANGE, stage2State.currentQsoStage)
+        assertEquals(firstSession, stage2State.fullQsoSession)
+        assertTrue(stage2State.selectedQsoFieldOptions.isEmpty())
+        assertFalse(stage2State.isQsoStageSubmitted)
+        assertEquals(0, stage2State.qsoStageReplayCount)
+        assertNull(stage2State.qsoStageXpAward)
+        assertEquals(playsBeforeStage2 + 1, fakeAudioPlayer.playCalls.size)
+        assertEquals(
+            firstSession.stageChallenge(QsoStage.MAIN_EXCHANGE).transmitText to expectedPrefs,
+            fakeAudioPlayer.playCalls.last()
+        )
+
+        // Stage 2: select all 4 correct fields and submit (20 field XP + 2 streak + 5 first-copy = 27 XP)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.RST, firstSession.rst)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.QTH, firstSession.qth)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.OP_NAME, firstSession.opName)
+        // Premature submit with 3/4 fields is ignored
+        viewModel.submitQsoStage()
+        assertFalse(viewModel.uiState.value.isQsoStageSubmitted)
+
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CONDITION, firstSession.condition)
+        viewModel.submitQsoStage()
+
+        val afterStage2 = viewModel.uiState.value
+        assertTrue(afterStage2.isQsoStageSubmitted)
+        assertEquals(XpAward(baseXp = 20, streakBonusXp = 2, firstCopyBonusXp = 5), afterStage2.qsoStageXpAward)
+        assertEquals(37, afterStage2.totalXp)
+        assertEquals(2, afterStage2.streak)
+        assertEquals(2, afterStage2.dailyAnsweredCount)
+        assertEquals(0, afterStage2.completedFullQsoCount)
+
+        // Advance to Stage 3 (FINAL_SIGN_OFF) -> plays Stage 3 transmitText
+        val playsBeforeStage3 = fakeAudioPlayer.playCalls.size
+        viewModel.nextQsoStage()
+        val stage3State = viewModel.uiState.value
+        assertEquals(QsoStage.FINAL_SIGN_OFF, stage3State.currentQsoStage)
+        assertEquals(firstSession, stage3State.fullQsoSession)
+        assertFalse(stage3State.isQsoStageSubmitted)
+        assertEquals(playsBeforeStage3 + 1, fakeAudioPlayer.playCalls.size)
+        assertEquals(
+            firstSession.stageChallenge(QsoStage.FINAL_SIGN_OFF).transmitText to expectedPrefs,
+            fakeAudioPlayer.playCalls.last()
+        )
+
+        // Stage 3: select all 3 correct fields and submit (15 field + 25 completion bonus = 40 base + 4 streak + 5 first-copy = 49 XP)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.RIG, firstSession.rig)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.POWER, firstSession.power)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.WEATHER, firstSession.weather)
+        viewModel.submitQsoStage()
+
+        val afterStage3 = viewModel.uiState.value
+        assertTrue(afterStage3.isQsoStageSubmitted)
+        assertEquals(XpAward(baseXp = 40, streakBonusXp = 4, firstCopyBonusXp = 5), afterStage3.qsoStageXpAward)
+        assertEquals(86, afterStage3.totalXp)
+        assertEquals(3, afterStage3.streak)
+        assertEquals(3, afterStage3.dailyAnsweredCount)
+        assertEquals(1, afterStage3.completedFullQsoCount)
+        assertEquals(1, fakeProgressRepository.trainerProgress.value.completedFullQsoCount)
+
+        // Advance from Stage 3 -> starts a new FullQsoSession with different callsign at CQ_CALL and plays Stage 1 transmitText
+        val playsBeforeNewQso = fakeAudioPlayer.playCalls.size
+        viewModel.nextQsoStage()
+        val newQsoState = viewModel.uiState.value
+        assertEquals(QsoStage.CQ_CALL, newQsoState.currentQsoStage)
+        assertNotEquals(firstSession.dxCallsign, newQsoState.fullQsoSession.dxCallsign)
+        assertTrue(newQsoState.selectedQsoFieldOptions.isEmpty())
+        assertFalse(newQsoState.isQsoStageSubmitted)
+        assertEquals(1, newQsoState.completedFullQsoCount)
+        assertEquals(playsBeforeNewQso + 1, fakeAudioPlayer.playCalls.size)
+        assertEquals(
+            newQsoState.fullQsoSession.stageChallenge(QsoStage.CQ_CALL).transmitText to expectedPrefs,
+            fakeAudioPlayer.playCalls.last()
+        )
+    }
+
+    @Test
+    fun `partial QSO stage copy awards field XP resets combo streak and replayQsoStageAudio forfeits FirstCopy bonus`() {
+        val session = viewModel.uiState.value.fullQsoSession
+
+        // Stage 1: replay before submitting -> increments qsoStageReplayCount and forfeits First-Copy bonus
+        viewModel.replayQsoStageAudio()
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
+        assertEquals(
+            session.stageChallenge(QsoStage.CQ_CALL).transmitText,
+            fakeAudioPlayer.playCalls.last().first
+        )
+
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
+        viewModel.submitQsoStage()
+
+        // Clean copy with 1 replay -> 5 base XP, 0 streak bonus, 0 first-copy bonus, streak = 1
+        assertEquals(XpAward(baseXp = 5, streakBonusXp = 0, firstCopyBonusXp = 0), viewModel.uiState.value.qsoStageXpAward)
+        assertEquals(1, viewModel.uiState.value.streak)
+
+        // Replaying after submission plays audio but does not increment qsoStageReplayCount
+        val playsBeforePostSubmitReplay = fakeAudioPlayer.playCalls.size
+        viewModel.replayQsoStageAudio()
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
+        assertEquals(playsBeforePostSubmitReplay + 1, fakeAudioPlayer.playCalls.size)
+
+        // Advance to Stage 2 and copy 3 of 4 fields right (1 wrong) -> partial copy resets streak to 0, awards 15 field XP
+        viewModel.nextQsoStage()
+        val stage2 = session.stageChallenge(QsoStage.MAIN_EXCHANGE)
+        val wrongQth = stage2.fields.first { it.fieldType == QsoExchangeFieldType.QTH }.options.first { it != session.qth }
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.RST, session.rst)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.QTH, wrongQth)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.OP_NAME, session.opName)
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CONDITION, session.condition)
+        viewModel.submitQsoStage()
+
+        val afterPartialStage2 = viewModel.uiState.value
+        assertEquals(XpAward(baseXp = 15, streakBonusXp = 0, firstCopyBonusXp = 0), afterPartialStage2.qsoStageXpAward)
+        assertEquals(20, afterPartialStage2.totalXp)
+        assertEquals(0, afterPartialStage2.streak)
+        assertEquals(1, afterPartialStage2.bestStreak)
     }
 
     private class FakeUserPreferencesRepository(
