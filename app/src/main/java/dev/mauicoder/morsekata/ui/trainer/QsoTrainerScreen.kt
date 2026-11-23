@@ -55,8 +55,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.trainer.CategoryMasteryStat
 import dev.mauicoder.morsekata.trainer.DayActivityStatus
 import dev.mauicoder.morsekata.trainer.DayStreakCell
@@ -77,7 +77,7 @@ private val PracticedAmber = Color(0xFFF57C00)
 
 @Composable
 fun QsoTrainerScreen(
-    viewModel: QsoTrainerViewModel = viewModel(),
+    viewModel: QsoTrainerViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()

@@ -27,7 +27,7 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.unit.dp
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
+import androidx.hilt.navigation.compose.hiltViewModel
 import dev.mauicoder.morsekata.viewmodel.DecodeFileViewModel
 
 object DecodeFileDefaults {
@@ -41,7 +41,7 @@ object DecodeFileDefaults {
  */
 @Composable
 fun DecodeFileScreen(
-    viewModel: DecodeFileViewModel = viewModel(),
+    viewModel: DecodeFileViewModel = hiltViewModel(),
     modifier: Modifier = Modifier,
     onDecodeClicked: (() -> Unit)? = null
 ) {

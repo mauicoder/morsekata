@@ -56,15 +56,15 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.R
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
 import dev.mauicoder.morsekata.viewmodel.MorseDecoderViewModel
 
 @Composable
 fun MorseDecoderScreen(
-    viewModel: MorseDecoderViewModel = viewModel(),
+    viewModel: MorseDecoderViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()

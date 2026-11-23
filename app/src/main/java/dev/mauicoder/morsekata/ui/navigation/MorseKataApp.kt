@@ -7,8 +7,8 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Modifier
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import androidx.navigation.NavDestination.Companion.hasRoute
 import androidx.navigation.NavDestination.Companion.hierarchy
 import androidx.navigation.NavGraph.Companion.findStartDestination
@@ -29,7 +29,7 @@ import dev.mauicoder.morsekata.viewmodel.UserPreferencesViewModel
  */
 @Composable
 fun MorseKataApp(
-    userPreferencesViewModel: UserPreferencesViewModel = viewModel(),
+    userPreferencesViewModel: UserPreferencesViewModel = hiltViewModel(),
     navController: NavHostController = rememberNavController(),
     modifier: Modifier = Modifier
 ) {
@@ -81,16 +81,16 @@ fun MorseKataApp(
             modifier = Modifier.padding(innerPadding)
         ) {
             composable<TrainRoute> {
-                QsoTrainerScreen()
+                QsoTrainerScreen(viewModel = hiltViewModel())
             }
             composable<PlayTextRoute> {
-                PlayTextScreen()
+                PlayTextScreen(viewModel = hiltViewModel())
             }
             composable<DecoderRoute> {
-                MorseDecoderScreen()
+                MorseDecoderScreen(viewModel = hiltViewModel())
             }
             composable<ConfigRoute> {
-                SettingsScreen()
+                SettingsScreen(viewModel = hiltViewModel())
             }
         }
     }

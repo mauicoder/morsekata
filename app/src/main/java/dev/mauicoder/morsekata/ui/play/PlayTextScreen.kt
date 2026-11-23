@@ -51,8 +51,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
-import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.R
 import dev.mauicoder.morsekata.data.UserPreferences
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
@@ -61,7 +61,7 @@ import dev.mauicoder.morsekata.viewmodel.PlayTextViewModel
 
 @Composable
 fun PlayTextScreen(
-    viewModel: PlayTextViewModel = viewModel(),
+    viewModel: PlayTextViewModel = hiltViewModel(),
     modifier: Modifier = Modifier
 ) {
     val text by viewModel.textState.collectAsStateWithLifecycle()
