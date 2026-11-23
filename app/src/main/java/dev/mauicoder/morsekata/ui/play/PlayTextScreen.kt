@@ -51,7 +51,6 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.R
@@ -69,7 +68,6 @@ fun PlayTextScreen(
     val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
     val preferences by viewModel.userPreferences.collectAsStateWithLifecycle()
     val context = LocalContext.current
-    val fragmentActivity = context as? FragmentActivity
 
     DisposableEffect(Unit) {
         onDispose {
@@ -85,7 +83,7 @@ fun PlayTextScreen(
         onPlay = viewModel::playMorseCallback,
         onStop = viewModel::stopPlayback,
         onSaveWav = { viewModel.saveMorseAsWaveFile(context) },
-        onShareAudio = { fragmentActivity?.let { viewModel.shareMorseAsWaveFile(it) } },
+        onShareAudio = { viewModel.shareMorseAsWaveFile(context) },
         modifier = modifier
     )
 }

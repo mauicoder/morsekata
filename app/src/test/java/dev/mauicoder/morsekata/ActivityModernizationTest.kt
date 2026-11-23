@@ -2,7 +2,6 @@ package dev.mauicoder.morsekata
 
 import androidx.activity.ComponentActivity
 import androidx.appcompat.app.AppCompatActivity
-import androidx.fragment.app.Fragment
 import org.junit.Assert.assertFalse
 import org.junit.Assert.assertTrue
 import org.junit.Test
@@ -28,7 +27,7 @@ class ActivityModernizationTest {
     @Test
     fun mainActivity_hasNoFragmentFields() {
         val fragmentFields = MainActivity::class.java.declaredFields.filter {
-            Fragment::class.java.isAssignableFrom(it.type)
+            it.type.name.contains("Fragment", ignoreCase = true)
         }
         assertTrue(
             "MainActivity should not have fragment field injections, but found: ${fragmentFields.map { it.name }}",

@@ -6,7 +6,6 @@ import android.os.Build
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
-import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.LiveData
 import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
@@ -140,7 +139,7 @@ class PlayTextViewModel @Inject constructor(
         return totalMs
     }
 
-    fun shareMorseAsWaveFile(activity: FragmentActivity) {
+    fun shareMorseAsWaveFile(context: Context) {
         val prefs = userPreferences.value
         val text = _textState.value
         if (text.isBlank()) return
@@ -160,7 +159,7 @@ class PlayTextViewModel @Inject constructor(
             prefs.frequency,
             SAMPLE_RATE
         )
-        shareFile.shareAsFile(activity, wavBytes)
+        shareFile.shareAsFile(context, wavBytes)
     }
 
     fun saveMorseAsWaveFile(context: Context) {
