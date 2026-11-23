@@ -1,6 +1,11 @@
 package dev.mauicoder.morsekata.ui.navigation
 
 import androidx.annotation.DrawableRes
+import androidx.navigation.NavDestination
+import androidx.navigation.NavDestination.Companion.hasRoute
+import androidx.navigation.NavDestination.Companion.hierarchy
+import androidx.navigation.NavOptions
+import androidx.navigation.navOptions
 import dev.mauicoder.morsekata.R
 import kotlinx.serialization.Serializable
 
@@ -71,3 +76,48 @@ fun getBottomNavItems(showExperimentalFeatures: Boolean): List<BottomNavItem<*>>
 
     return items
 }
+
+/**
+ * Evaluates whether navigation should automatically redirect to [TrainRoute]
+ * when experimental features are disabled while on [DecoderRoute].
+ */
+fun shouldRedirectToTrain(
+    isCurrentDestinationDecoder: Boolean,
+    showExperimentalFeatures: Boolean
+): Boolean {
+    return isCurrentDestinationDecoder && !showExperimentalFeatures
+}
+
+/**
+ * Creates standard bottom navigation options configured for state-preserving tab switching:
+ * pop up to the start destination (saving state), single-top launch, and state restoration.
+ */
+fun bottomNavOptions(startDestinationId: Int): NavOptions = navOptions {
+    popUpTo(startDestinationId) {
+        saveState = true
+    }
+    launchSingleTop = true
+    restoreState = true
+}
+
+/**
+ * Determines whether this [NavDestination] matches the route of the provided [BottomNavItem].
+ */
+fun NavDestination?.isItemSelected(item: BottomNavItem<*>): Boolean {
+    if (this == null) return false
+    return hierarchy.any { it.hasRoute(item.route::class) }
+}
+
+/**
+ * Checks if a given destination route string matches a target route object.
+ */
+fun isRouteMatching(currentRoute: String?, targetRoute: Any): Boolean {
+    if (currentRoute == null) return false
+    val targetClassName = targetRoute::class.qualifiedName ?: return false
+    return currentRoute == targetClassName ||
+            currentRoute.startsWith("$targetClassName/") ||
+            currentRoute.startsWith("$targetClassName?")
+}
+
+
+

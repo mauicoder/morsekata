@@ -21,20 +21,57 @@ import androidx.compose.material3.Surface
 import androidx.compose.material3.Switch
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.data.UserPreferences
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
+import dev.mauicoder.morsekata.viewmodel.UserPreferencesViewModel
 import kotlin.math.roundToInt
 
 private const val FREQUENCY_SLIDER_STEPS =
     (UserPreferences.MAX_FREQUENCY - UserPreferences.MIN_FREQUENCY) / UserPreferences.FREQUENCY_STEP - 1
 private const val WPM_SLIDER_STEPS =
     (UserPreferences.MAX_WPM - UserPreferences.MIN_WPM) / UserPreferences.WPM_STEP - 1
+
+@Composable
+fun SettingsScreen(
+    viewModel: UserPreferencesViewModel = viewModel(),
+    modifier: Modifier = Modifier
+) {
+    val preferences by viewModel.userPreferences.collectAsStateWithLifecycle()
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopTestAudio()
+        }
+    }
+
+    SettingsScreen(
+        preferences = preferences,
+        onFrequencyChange = viewModel::setFrequency,
+        onIncreaseFrequency = viewModel::increaseFrequency,
+        onDecreaseFrequency = viewModel::decreaseFrequency,
+        onWpmChange = viewModel::setWpm,
+        onIncreaseWpm = viewModel::increaseWpm,
+        onDecreaseWpm = viewModel::decreaseWpm,
+        onFarnsworthWpmChange = viewModel::setFarnsworthWpm,
+        onIncreaseFarnsworthWpm = viewModel::increaseFarnsworthWpm,
+        onDecreaseFarnsworthWpm = viewModel::decreaseFarnsworthWpm,
+        onShowExperimentalFeaturesChange = viewModel::setShowExperimentalFeatures,
+        onPlayTestAudio = viewModel::playTestAudio,
+        onResetDefaults = viewModel::resetToDefaults,
+        modifier = modifier
+    )
+}
+
 
 @Composable
 fun SettingsScreen(

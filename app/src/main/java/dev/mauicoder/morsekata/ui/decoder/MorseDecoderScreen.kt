@@ -40,6 +40,7 @@ import androidx.compose.material3.OutlinedCard
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -55,8 +56,37 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.ContextCompat
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import androidx.lifecycle.viewmodel.compose.viewModel
 import dev.mauicoder.morsekata.R
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
+import dev.mauicoder.morsekata.viewmodel.MorseDecoderViewModel
+
+@Composable
+fun MorseDecoderScreen(
+    viewModel: MorseDecoderViewModel = viewModel(),
+    modifier: Modifier = Modifier
+) {
+    val decodedText by viewModel.decodedText.collectAsStateWithLifecycle()
+    val isListening by viewModel.isListening.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopListening()
+        }
+    }
+
+    MorseDecoderScreen(
+        decodedText = decodedText,
+        isListening = isListening,
+        onStartListening = { viewModel.startListening(context) },
+        onStopListening = viewModel::stopListening,
+        onClear = viewModel::clearDecodedText,
+        modifier = modifier
+    )
+}
+
 
 @Composable
 fun MorseDecoderScreen(
