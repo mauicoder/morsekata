@@ -1,4 +1,4 @@
-# Project Context: MorseLab
+# Project Context: Morse Kata
 
 **Purpose:** An Android application for experimenting with Morse code, specifically focusing on encoding/decoding, high-fidelity signal patterns, and real-time audio generation.
 
@@ -12,8 +12,8 @@
 - **Architecture:** MVVM with Clean Architecture principles.
 
 ## 2. Real Directory Map (Android Standard)
-- `/app/src/main/java/com/mauicoder/morselab/`: Core Kotlin logic, ViewModels, and UI.
-- `/app/src/main/java/com/mauicoder/morselab/data/`: DataStore serializers and repositories.
+- `/app/src/main/java/dev/mauicoder/morsekata/`: Core Kotlin logic, ViewModels, and UI.
+- `/app/src/main/java/dev/mauicoder/morsekata/data/`: DataStore serializers and repositories.
 - `/app/src/test/`: Unit tests for Morse logic.
 - `/app/src/androidTest/`: UI and integration tests.
 - `/gradle/`: Version catalog (`libs.versions.toml`).

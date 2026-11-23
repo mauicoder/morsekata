@@ -1,6 +1,6 @@
-# MorseLab
+# Morse Kata
 
-MorseLab is an experimental Android application designed for learning, improving, and experimenting with Morse code. It focuses on high-fidelity audio generation and modern Android development practices.
+Morse Kata is an experimental Android application designed for learning, improving, and experimenting with Morse code. It focuses on high-fidelity audio generation and modern Android development practices.
 
 ## 🚀 Modern Tech Stack
 - **Language:** Kotlin 2.x (Primary)

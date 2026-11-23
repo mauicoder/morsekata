@@ -24,5 +24,5 @@ dependencyResolutionManagement {
     }
 }
 
-rootProject.name = "MorseLab"
+rootProject.name = "Morse Kata"
 include(":app")
