@@ -40,6 +40,7 @@ import androidx.compose.material3.Tab
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -54,6 +55,8 @@ import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mauicoder.morsekata.trainer.CategoryMasteryStat
 import dev.mauicoder.morsekata.trainer.DayActivityStatus
 import dev.mauicoder.morsekata.trainer.DayStreakCell
@@ -66,10 +69,37 @@ import dev.mauicoder.morsekata.trainer.QsoTrainerUiMapper
 import dev.mauicoder.morsekata.trainer.QsoTrainerUiModel
 import dev.mauicoder.morsekata.trainer.QsoTrainerUiState
 import dev.mauicoder.morsekata.trainer.WeakItemStat
+import dev.mauicoder.morsekata.viewmodel.QsoTrainerViewModel
 
 private val CorrectGreen = Color(0xFF2E7D32)
 private val IncorrectRed = Color(0xFFC62828)
 private val PracticedAmber = Color(0xFFF57C00)
+
+@Composable
+fun QsoTrainerScreen(
+    viewModel: QsoTrainerViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier
+) {
+    val state by viewModel.uiState.collectAsStateWithLifecycle()
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopAudio()
+        }
+    }
+    QsoTrainerScreen(
+        state = state,
+        onSelectTab = viewModel::selectTab,
+        onSelectCategory = viewModel::selectCategory,
+        onSelectOption = viewModel::selectOption,
+        onReplayAudio = viewModel::replayAudio,
+        onNextQuestion = viewModel::nextQuestion,
+        onPracticeCategory = viewModel::practiceWeakestCategory,
+        onPreviewAudio = viewModel::previewItemAudio,
+        onResetProgress = viewModel::resetProgress,
+        modifier = modifier
+    )
+}
+
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable

@@ -3,12 +3,13 @@ package dev.mauicoder.morsekata.viewmodel
 import android.content.Context
 import android.net.Uri
 import android.util.Log
-import androidx.lifecycle.LiveData
-import androidx.lifecycle.MutableLiveData
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.MutableStateFlow
+import kotlinx.coroutines.flow.StateFlow
+import kotlinx.coroutines.flow.asStateFlow
 import kotlinx.coroutines.launch
 import dev.mauicoder.morsekata.decoder.MorseDecoder
 import java.io.IOException
@@ -17,11 +18,11 @@ import javax.inject.Inject
 @HiltViewModel
 class DecodeFileViewModel @Inject constructor() : ViewModel() {
 
-    private val _decodedText = MutableLiveData<String>()
-    val decodedText: LiveData<String> = _decodedText
+    private val _decodedText = MutableStateFlow("")
+    val decodedText: StateFlow<String> = _decodedText.asStateFlow()
 
-    private val _isDecoding = MutableLiveData<Boolean>()
-    val isDecoding: LiveData<Boolean> = _isDecoding
+    private val _isDecoding = MutableStateFlow(false)
+    val isDecoding: StateFlow<Boolean> = _isDecoding.asStateFlow()
 
     private var selectedFileUri: Uri? = null
 
@@ -29,7 +30,7 @@ class DecodeFileViewModel @Inject constructor() : ViewModel() {
         selectedFileUri = uri
     }
 
-    fun startDecoding(context: Context, playAudio: Boolean) {
+    fun startDecoding(context: Context, playAudio: Boolean = false) {
         val uri = selectedFileUri ?: return
         _isDecoding.value = true
         _decodedText.value = ""
@@ -51,7 +52,7 @@ class DecodeFileViewModel @Inject constructor() : ViewModel() {
                     Log.d("DecodeFile", "WAV Info: $sampleRate Hz, $bitsPerSample-bit, $numChannels-channel(s)")
 
                     if (numChannels != 1) {
-                        _decodedText.postValue("Error: Only mono audio files are supported.")
+                        _decodedText.value = "Error: Only mono audio files are supported."
                         return@launch
                     }
 
@@ -69,17 +70,17 @@ class DecodeFileViewModel @Inject constructor() : ViewModel() {
                     while (inputStream.read(byteBuffer).also { bytesRead = it } != -1) {
                         val floatBuffer = convertToFloatArray(byteBuffer, bytesRead, bitsPerSample)
                         decoder.processBuffer(floatBuffer, floatBuffer.size)
-                        _decodedText.postValue(decodedChars.toString()) // Update UI incrementally
+                        _decodedText.value = decodedChars.toString() // Update UI incrementally
                     }
 
                     decoder.flush()
-                    _decodedText.postValue(decodedChars.toString()) // Post final result
+                    _decodedText.value = decodedChars.toString() // Post final result
                 }
             } catch (e: Exception) {
                 Log.e("DecodeFile", "Error decoding file", e)
-                _decodedText.postValue("Error: ${e.message}")
+                _decodedText.value = "Error: ${e.message}"
             } finally {
-                _isDecoding.postValue(false)
+                _isDecoding.value = false
             }
         }
     }

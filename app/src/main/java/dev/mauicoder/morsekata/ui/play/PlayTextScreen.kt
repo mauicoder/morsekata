@@ -36,6 +36,7 @@ import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -50,10 +51,44 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import dev.mauicoder.morsekata.R
 import dev.mauicoder.morsekata.data.UserPreferences
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
 import dev.mauicoder.morsekata.utils.MorseCodeMaps
+import dev.mauicoder.morsekata.viewmodel.PlayTextViewModel
+
+@Composable
+fun PlayTextScreen(
+    viewModel: PlayTextViewModel = hiltViewModel(),
+    modifier: Modifier = Modifier
+) {
+    val text by viewModel.textState.collectAsStateWithLifecycle()
+    val isPlaying by viewModel.isPlaying.collectAsStateWithLifecycle()
+    val preferences by viewModel.userPreferences.collectAsStateWithLifecycle()
+    val context = LocalContext.current
+
+    DisposableEffect(Unit) {
+        onDispose {
+            viewModel.stopPlayback()
+        }
+    }
+
+    PlayTextScreen(
+        text = text,
+        isPlaying = isPlaying,
+        preferences = preferences,
+        onTextChange = viewModel::updateText,
+        onPlay = viewModel::playMorseCallback,
+        onStop = viewModel::stopPlayback,
+        onSaveWav = { viewModel.saveMorseAsWaveFile(context) },
+        onShareAudio = { viewModel.shareMorseAsWaveFile(context) },
+        modifier = modifier
+    )
+}
+
+
 
 /**
  * Converts a text string into formatted Morse code dots and dashes,
