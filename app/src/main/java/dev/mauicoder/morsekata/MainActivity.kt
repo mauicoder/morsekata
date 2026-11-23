@@ -46,6 +46,7 @@ class MainActivity : AppCompatActivity() {
 
         binding.bottomNavigationView.setOnItemSelectedListener {
             when(it.itemId) {
+                R.id.miTrain -> replaceFragment(qsoTrainerFragment)
                 R.id.miPlay -> replaceFragment(playTextFragment)
                 R.id.miDecode -> {
                     if (userPreferencesRepository.userPreferences.value.showExperimentalFeatures) {
@@ -54,7 +55,6 @@ class MainActivity : AppCompatActivity() {
                         false
                     }
                 }
-                R.id.miTrain -> replaceFragment(qsoTrainerFragment)
                 R.id.miConfig -> replaceFragment(configFragment)
                 else -> false
             }
@@ -69,14 +69,15 @@ class MainActivity : AppCompatActivity() {
                     if (!preferences.showExperimentalFeatures &&
                         binding.bottomNavigationView.selectedItemId == R.id.miDecode
                     ) {
-                        binding.bottomNavigationView.selectedItemId = R.id.miPlay
+                        binding.bottomNavigationView.selectedItemId = R.id.miTrain
                     }
                 }
             }
         }
 
         if (savedInstanceState == null) {
-            replaceFragment(playTextFragment) // place the home-fragment
+            binding.bottomNavigationView.selectedItemId = R.id.miTrain
+            replaceFragment(qsoTrainerFragment) // place the home-fragment
         }
     }
 
