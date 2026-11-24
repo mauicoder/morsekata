@@ -10,6 +10,7 @@ data class CallsignTrainerUiState(
     val isSubmitted: Boolean = false,
     val isCorrect: Boolean = false,
     val diffResult: CallsignDiffResult? = null,
+    val hasPlayedAudio: Boolean = false,
     val preAnswerReplayCount: Int = 0,
     val isPlayingAudio: Boolean = false,
     val bestWpmReached: Int = 0,

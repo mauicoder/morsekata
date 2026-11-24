@@ -29,10 +29,10 @@ object CallsignTrainerUiMapper {
             "Accuracy: 100%"
         }
         val streakText = "Streak: ${state.comboStreak}"
-        val replayButtonText = if (state.preAnswerReplayCount > 0) {
-            "Replay Audio (${state.preAnswerReplayCount})"
-        } else {
-            "Replay Audio"
+        val replayButtonText = when {
+            !state.hasPlayedAudio -> "Play Audio"
+            state.preAnswerReplayCount > 0 -> "Replay Audio (${state.preAnswerReplayCount})"
+            else -> "Replay Audio"
         }
         val isSubmitEnabled = state.typedInput.isNotBlank() && !state.isSubmitted
         val isFeedbackVisible = state.isSubmitted

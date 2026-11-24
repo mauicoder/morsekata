@@ -248,7 +248,7 @@ fun CallsignTrainerContent(
         ) {
             Icon(
                 painter = painterResource(id = if (state.isPlayingAudio) R.drawable.ic_stop else R.drawable.ic_play),
-                contentDescription = if (state.isPlayingAudio) "Stop audio" else "Replay audio",
+                contentDescription = if (state.isPlayingAudio) "Stop audio" else if (!state.hasPlayedAudio) "Play audio" else "Replay audio",
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))

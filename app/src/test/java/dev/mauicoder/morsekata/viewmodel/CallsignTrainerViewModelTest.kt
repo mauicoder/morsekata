@@ -50,7 +50,7 @@ class CallsignTrainerViewModelTest {
     }
 
     @Test
-    fun `initial callsign state has defaults and initializes target on Callsigns tab selection`() {
+    fun `initial callsign state has defaults and initializes target without auto-playing audio on Callsigns tab selection`() {
         val initialState = viewModel.callsignUiState.value
         assertEquals(CallsignDrillMode.CALLSIGNS_ONLY, initialState.drillMode)
         assertEquals(CallsignSpeedMode.ADAPTIVE, initialState.speedMode)
@@ -60,16 +60,29 @@ class CallsignTrainerViewModelTest {
         assertEquals("", initialState.typedInput)
         assertFalse(initialState.isSubmitted)
         assertFalse(initialState.isCorrect)
+        assertFalse(initialState.hasPlayedAudio)
 
-        // Select Callsigns tab -> should initialize target and play audio
+        // Select Callsigns tab -> should initialize target but wait for manual audio play
         viewModel.selectTab(QsoTrainerTab.CALLSIGNS)
 
         val target = viewModel.callsignUiState.value.currentTarget
         assertNotNull(target)
         assertFalse(target!!.fullTransmissionText.isBlank())
+        assertFalse(viewModel.callsignUiState.value.hasPlayedAudio)
+        assertEquals(0, fakeAudioPlayer.playCalls.size)
+
+        // Tapping Play Audio for the first time plays audio and sets hasPlayedAudio = true with 0 replays
+        viewModel.onReplayCallsignAudio()
+        assertTrue(viewModel.callsignUiState.value.hasPlayedAudio)
+        assertEquals(0, viewModel.callsignUiState.value.preAnswerReplayCount)
         assertEquals(1, fakeAudioPlayer.playCalls.size)
         assertEquals(target.fullTransmissionText, fakeAudioPlayer.playCalls.first().first)
         assertEquals(20, fakeAudioPlayer.playCalls.first().second.wpm)
+
+        // Tapping again counts as a replay
+        viewModel.onReplayCallsignAudio()
+        assertEquals(1, viewModel.callsignUiState.value.preAnswerReplayCount)
+        assertEquals(2, fakeAudioPlayer.playCalls.size)
     }
 
     @Test
@@ -121,7 +134,11 @@ class CallsignTrainerViewModelTest {
         viewModel.selectTab(QsoTrainerTab.CALLSIGNS)
         val target = viewModel.callsignUiState.value.currentTarget!!
 
-        // Replay audio once before submitting
+        // First listen: Play Audio (preAnswerReplayCount remains 0)
+        viewModel.onReplayCallsignAudio()
+        assertEquals(0, viewModel.callsignUiState.value.preAnswerReplayCount)
+
+        // Second listen: Replay audio once before submitting
         viewModel.onReplayCallsignAudio()
         assertEquals(1, viewModel.callsignUiState.value.preAnswerReplayCount)
 
@@ -294,7 +311,8 @@ class CallsignTrainerViewModelTest {
         viewModel.onSelectCallsignDrillMode(CallsignDrillMode.CONTEST_EXCHANGE)
         val target = viewModel.callsignUiState.value.currentTarget!!
 
-        // 1 replay -> no first-copy bonus
+        // 1 initial play + 1 replay -> preAnswerReplayCount = 1, no first-copy bonus
+        viewModel.onReplayCallsignAudio()
         viewModel.onReplayCallsignAudio()
         viewModel.onTypeCallsignInput(target.fullTransmissionText)
         viewModel.onSubmitCallsignInput()

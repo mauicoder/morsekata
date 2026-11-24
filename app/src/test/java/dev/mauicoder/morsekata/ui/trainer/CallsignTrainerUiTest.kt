@@ -67,7 +67,7 @@ class CallsignTrainerUiTest {
         assertEquals("Best: 22 WPM", model.bestWpmText)
         assertEquals("Accuracy: 100%", model.accuracyText)
         assertEquals("Streak: 3", model.streakText)
-        assertEquals("Replay Audio", model.replayButtonText)
+        assertEquals("Play Audio", model.replayButtonText)
         assertFalse("Submit should be disabled when input is blank", model.isSubmitEnabled)
         assertFalse("Feedback should not be visible before submit", model.isFeedbackVisible)
         assertNull(model.earnedXpText)
@@ -91,12 +91,25 @@ class CallsignTrainerUiTest {
     @Test
     fun replayCount_updatesReplayButtonText() {
         val state = CallsignTrainerUiState(
+            hasPlayedAudio = true,
             preAnswerReplayCount = 2
         )
 
         val model = CallsignTrainerUiMapper.map(state)
 
         assertEquals("Replay Audio (2)", model.replayButtonText)
+    }
+
+    @Test
+    fun replayButtonText_transitionsFromPlayAudioToReplayAudio() {
+        val unplayedState = CallsignTrainerUiState(hasPlayedAudio = false)
+        assertEquals("Play Audio", CallsignTrainerUiMapper.map(unplayedState).replayButtonText)
+
+        val playedOnceState = CallsignTrainerUiState(hasPlayedAudio = true, preAnswerReplayCount = 0)
+        assertEquals("Replay Audio", CallsignTrainerUiMapper.map(playedOnceState).replayButtonText)
+
+        val replayedState = CallsignTrainerUiState(hasPlayedAudio = true, preAnswerReplayCount = 1)
+        assertEquals("Replay Audio (1)", CallsignTrainerUiMapper.map(replayedState).replayButtonText)
     }
 
     @Test

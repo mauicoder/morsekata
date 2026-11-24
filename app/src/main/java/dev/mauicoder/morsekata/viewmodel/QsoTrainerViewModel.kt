@@ -144,12 +144,15 @@ class QsoTrainerViewModel @Inject constructor(
     }
 
     fun selectTab(tab: QsoTrainerTab) {
+        morseAudioPlayer.stop()
+        autoAdvanceJob?.cancel()
+        autoAdvanceJob = null
         _uiState.update { current ->
             current.copy(selectedTab = tab)
         }
         if (tab == QsoTrainerTab.CALLSIGNS) {
             if (_callsignUiState.value.currentTarget == null) {
-                onNextCallsign()
+                onNextCallsign(playAudio = false)
             }
         }
     }
@@ -300,13 +303,15 @@ class QsoTrainerViewModel @Inject constructor(
     fun onReplayCallsignAudio() {
         val current = _callsignUiState.value
         val target = current.currentTarget ?: return
-        if (!current.isSubmitted) {
+        if (!current.hasPlayedAudio) {
+            _callsignUiState.update { it.copy(hasPlayedAudio = true) }
+        } else if (!current.isSubmitted) {
             _callsignUiState.update { it.copy(preAnswerReplayCount = it.preAnswerReplayCount + 1) }
         }
         playCallsignAudio(target.fullTransmissionText, _callsignUiState.value.currentWpm)
     }
 
-    fun onNextCallsign() {
+    fun onNextCallsign(playAudio: Boolean = true) {
         autoAdvanceJob?.cancel()
         autoAdvanceJob = null
 
@@ -325,20 +330,25 @@ class QsoTrainerViewModel @Inject constructor(
                 isCorrect = false,
                 diffResult = null,
                 preAnswerReplayCount = 0,
+                hasPlayedAudio = playAudio,
                 autoAdvanceCountdownActive = false,
                 earnedXp = 0,
                 isPlayingAudio = false
             )
         }
 
-        playCallsignAudio(newTarget.fullTransmissionText, _callsignUiState.value.currentWpm)
+        if (playAudio) {
+            playCallsignAudio(newTarget.fullTransmissionText, _callsignUiState.value.currentWpm)
+        } else {
+            morseAudioPlayer.stop()
+        }
     }
 
     fun onSelectCallsignDrillMode(mode: CallsignDrillMode) {
         autoAdvanceJob?.cancel()
         autoAdvanceJob = null
         _callsignUiState.update { it.copy(drillMode = mode) }
-        onNextCallsign()
+        onNextCallsign(playAudio = false)
     }
 
     fun onSelectCallsignSpeedMode(mode: CallsignSpeedMode) {
@@ -357,7 +367,7 @@ class QsoTrainerViewModel @Inject constructor(
         autoAdvanceJob = null
         _callsignUiState.update { it.copy(useCutNumbers = enabled) }
         if (_callsignUiState.value.drillMode == CallsignDrillMode.CONTEST_EXCHANGE) {
-            onNextCallsign()
+            onNextCallsign(playAudio = false)
         }
     }
 
