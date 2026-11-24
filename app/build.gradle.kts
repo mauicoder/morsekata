@@ -9,6 +9,32 @@ plugins {
     alias(libs.plugins.hilt.android)
 }
 
+fun keychainPassword(service: String): String =
+    providers.exec {
+        commandLine(
+            "security", "find-generic-password",
+            "-a", "mauicoder",
+            "-s", service,
+            "-w"
+        )
+    }.standardOutput.asText.get().trim()
+
+android {
+    signingConfigs {
+        create("release") {
+            storeFile = file("${System.getProperty("user.home")}/.android/keystores/mauicoder-upload.jks")
+            storePassword = keychainPassword("android-upload-store-pass")
+            keyAlias = "upload"
+            keyPassword = keychainPassword("android-upload-key-pass")
+        }
+    }
+    buildTypes {
+        release {
+            signingConfig = signingConfigs.getByName("release")
+        }
+    }
+}
+
 configure<ApplicationExtension> {
     namespace = "dev.mauicoder.morsekata"
     compileSdk = 36

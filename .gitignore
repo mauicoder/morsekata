@@ -22,3 +22,7 @@ local.properties
 docs
 app/build
 /tasks.json
+
+# never add keystores
+*.jks
+*.keystore
