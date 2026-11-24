@@ -541,5 +541,30 @@ class QsoTrainerUiMapperTest {
         assertTrue(submittedStage3CleanUi.feedbackText.contains("Full QSO Logged"))
         assertTrue(submittedStage3CleanUi.feedbackText.contains("Rank Up: Novice!"))
     }
+
+    @Test
+    fun `mapStats includes bestCallsignWpm, formatted bestCallsignWpmText, and completedCallsignCount from state`() {
+        val zeroState = QsoTrainerUiState(
+            currentEntry = sampleEntry,
+            options = sampleOptions,
+            bestCallsignWpm = 0,
+            completedCallsignCount = 0
+        )
+        val zeroStats = QsoTrainerUiMapper.mapStats(zeroState)
+        assertEquals(0, zeroStats.bestCallsignWpm)
+        assertEquals("—", zeroStats.bestCallsignWpmText)
+        assertEquals(0, zeroStats.completedCallsignCount)
+
+        val populatedState = QsoTrainerUiState(
+            currentEntry = sampleEntry,
+            options = sampleOptions,
+            bestCallsignWpm = 28,
+            completedCallsignCount = 42
+        )
+        val populatedStats = QsoTrainerUiMapper.mapStats(populatedState)
+        assertEquals(28, populatedStats.bestCallsignWpm)
+        assertEquals("28 WPM", populatedStats.bestCallsignWpmText)
+        assertEquals(42, populatedStats.completedCallsignCount)
+    }
 }
 

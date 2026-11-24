@@ -313,7 +313,10 @@ object QsoTrainerUiMapper {
             fullPhrasesMastery = fullPhrasesMastery,
             recommendedCategory = recommendedCategory,
             weakItems = weakItems,
-            completedFullQsoCount = state.completedFullQsoCount
+            completedFullQsoCount = state.completedFullQsoCount,
+            bestCallsignWpm = state.bestCallsignWpm,
+            bestCallsignWpmText = if (state.bestCallsignWpm > 0) "${state.bestCallsignWpm} WPM" else "—",
+            completedCallsignCount = state.completedCallsignCount
         )
     }
 

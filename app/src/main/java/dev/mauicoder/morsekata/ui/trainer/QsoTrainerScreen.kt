@@ -768,9 +768,25 @@ private fun LifetimePerformanceCard(stats: QsoStatsUiModel) {
                 )
             }
 
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(12.dp)
+            ) {
+                StatGridTile(
+                    label = "Full QSOs Logged",
+                    value = "${stats.completedFullQsoCount}",
+                    modifier = Modifier.weight(1f)
+                )
+                StatGridTile(
+                    label = "Callsigns Copied",
+                    value = "${stats.completedCallsignCount}",
+                    modifier = Modifier.weight(1f)
+                )
+            }
+
             StatGridTile(
-                label = "Full QSOs Logged",
-                value = "${stats.completedFullQsoCount}",
+                label = "Best Callsign WPM",
+                value = stats.bestCallsignWpmText,
                 modifier = Modifier.fillMaxWidth()
             )
         }
