@@ -324,7 +324,7 @@ class TrainerProgressSerializerTest {
     }
 
     @Test
-    fun `recordCallsignAnswer on incorrect resets streak and does not increment completed callsigns`() {
+    fun `recordCallsignAnswer on incorrect resets streak and does not increment completed callsigns or update best WPM`() {
         val initial = TrainerProgress(
             totalXp = 100,
             currentAnswerStreak = 5,
@@ -336,7 +336,7 @@ class TrainerProgressSerializerTest {
             isCorrect = false,
             isContestExchange = false,
             preAnswerReplayCount = 0,
-            achievedWpm = 20,
+            achievedWpm = 30, // Higher than bestCallsignWpm (24)
             todayEpochDay = 300L,
             dailyGoalTarget = 5
         )
@@ -346,6 +346,24 @@ class TrainerProgressSerializerTest {
         assertEquals(100, updated.totalXp)
         assertEquals(0, updated.currentAnswerStreak)
         assertEquals(5, updated.completedCallsignCount)
-        assertEquals(24, updated.bestCallsignWpm)
+        assertEquals(24, updated.bestCallsignWpm) // Must remain 24 despite higher achievedWpm on failure
+    }
+
+    @Test
+    fun `recordCallsignAnswer on incorrect with zero initial best WPM retains zero`() {
+        val initial = TrainerProgress(
+            bestCallsignWpm = 0
+        )
+
+        val transition = initial.recordCallsignAnswer(
+            isCorrect = false,
+            isContestExchange = false,
+            preAnswerReplayCount = 0,
+            achievedWpm = 20,
+            todayEpochDay = 300L,
+            dailyGoalTarget = 5
+        )
+
+        assertEquals(0, transition.updatedProgress.bestCallsignWpm)
     }
 }

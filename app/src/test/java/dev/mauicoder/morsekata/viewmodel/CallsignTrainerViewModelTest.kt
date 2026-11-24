@@ -175,10 +175,11 @@ class CallsignTrainerViewModelTest {
         assertNotNull(state.diffResult)
         assertFalse(state.diffResult!!.isMatch)
 
-        // Progress streak was reset
+        // Progress streak was reset and bestCallsignWpm was NOT erroneously updated on failure
         val progress = fakeProgressRepository.trainerProgress.value
         assertEquals(0, progress.currentAnswerStreak)
         assertEquals(0, progress.completedCallsignCount)
+        assertEquals(0, progress.bestCallsignWpm)
 
         // Target has NOT changed yet (waits for manual next)
         assertEquals(target, manualVm.callsignUiState.value.currentTarget)
@@ -190,6 +191,29 @@ class CallsignTrainerViewModelTest {
         assertFalse(afterNext.isCorrect)
         assertNull(afterNext.diffResult)
         assertEquals("", afterNext.typedInput)
+    }
+
+    @Test
+    fun `incorrect submission does not update bestCallsignWpm in repository or state`() {
+        fakeProgressRepository.updateProgressBlocking {
+            it.copy(bestCallsignWpm = 15)
+        }
+        val manualVm = QsoTrainerViewModel(
+            userPreferencesRepository = fakePreferencesRepository,
+            trainerProgressRepository = fakeProgressRepository,
+            morseAudioPlayer = fakeAudioPlayer,
+            clock = clock,
+            random = Random(12345),
+            autoAdvanceDelayMs = 5000L
+        )
+        manualVm.selectTab(QsoTrainerTab.CALLSIGNS)
+        // Current speed is 20 WPM, which is higher than bestCallsignWpm (15)
+        manualVm.onTypeCallsignInput("WRONG")
+        manualVm.onSubmitCallsignInput()
+
+        val progress = fakeProgressRepository.trainerProgress.value
+        assertEquals(15, progress.bestCallsignWpm)
+        assertEquals(15, manualVm.callsignUiState.value.bestWpmReached)
     }
 
     @Test

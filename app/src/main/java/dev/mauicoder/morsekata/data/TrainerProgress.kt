@@ -154,7 +154,7 @@ data class TrainerProgress(
             firstCopyBonusXp = firstCopyBonusXp
         )
         val updatedCompletedCount = if (isCorrect) completedCallsignCount + 1 else completedCallsignCount
-        val updatedBestWpm = maxOf(bestCallsignWpm, achievedWpm)
+        val updatedBestWpm = if (isCorrect) maxOf(bestCallsignWpm, achievedWpm) else bestCallsignWpm
 
         return applyChallengeCompletion(
             newAnswerStreak = newAnswerStreak,

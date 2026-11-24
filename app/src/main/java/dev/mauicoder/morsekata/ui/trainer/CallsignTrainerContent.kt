@@ -1,5 +1,6 @@
 package dev.mauicoder.morsekata.ui.trainer
 
+import android.os.Build
 import android.view.HapticFeedbackConstants
 import androidx.compose.foundation.horizontalScroll
 import androidx.compose.foundation.layout.Arrangement
@@ -34,8 +35,12 @@ import androidx.compose.material3.SingleChoiceSegmentedButtonRow
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -54,6 +59,7 @@ import dev.mauicoder.morsekata.trainer.CallsignDiffCalculator
 import dev.mauicoder.morsekata.trainer.CallsignDrillMode
 import dev.mauicoder.morsekata.trainer.CallsignSpeedMode
 import dev.mauicoder.morsekata.trainer.CallsignTarget
+import dev.mauicoder.morsekata.trainer.CallsignTrainerUiMapper
 import dev.mauicoder.morsekata.trainer.CallsignTrainerUiState
 import dev.mauicoder.morsekata.ui.theme.MorseKataTheme
 
@@ -71,6 +77,29 @@ fun CallsignTrainerContent(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
+    val uiModel = remember(state) { CallsignTrainerUiMapper.map(state) }
+    val focusRequester = remember { FocusRequester() }
+
+    LaunchedEffect(state.currentTarget) {
+        if (!state.isSubmitted && state.currentTarget != null) {
+            runCatching { focusRequester.requestFocus() }
+        }
+    }
+
+    LaunchedEffect(state.isSubmitted) {
+        if (state.isSubmitted) {
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                view.performHapticFeedback(
+                    if (state.isCorrect) HapticFeedbackConstants.CONFIRM else HapticFeedbackConstants.REJECT
+                )
+            } else {
+                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                if (!state.isCorrect) {
+                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                }
+            }
+        }
+    }
 
     Column(
         modifier = modifier
@@ -148,7 +177,7 @@ fun CallsignTrainerContent(
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                         Text(
-                            text = "${state.currentWpm} WPM",
+                            text = uiModel.speedText,
                             style = MaterialTheme.typography.headlineMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.primary
@@ -159,7 +188,7 @@ fun CallsignTrainerContent(
                         color = MaterialTheme.colorScheme.secondaryContainer
                     ) {
                         Text(
-                            text = "Best: ${state.bestWpmReached} WPM",
+                            text = uiModel.bestWpmText,
                             style = MaterialTheme.typography.labelLarge,
                             fontWeight = FontWeight.SemiBold,
                             color = MaterialTheme.colorScheme.onSecondaryContainer,
@@ -175,14 +204,8 @@ fun CallsignTrainerContent(
                     horizontalArrangement = Arrangement.SpaceBetween,
                     verticalAlignment = Alignment.CenterVertically
                 ) {
-                    val accuracyText = if (state.sessionAnsweredCount > 0) {
-                        val pct = (state.sessionCorrectCount * 100) / state.sessionAnsweredCount
-                        "Accuracy: $pct% (${state.sessionCorrectCount}/${state.sessionAnsweredCount})"
-                    } else {
-                        "Accuracy: 100%"
-                    }
                     Text(
-                        text = accuracyText,
+                        text = uiModel.accuracyText,
                         style = MaterialTheme.typography.bodyMedium,
                         fontWeight = FontWeight.Medium
                     )
@@ -196,7 +219,7 @@ fun CallsignTrainerContent(
                         }
                     ) {
                         Text(
-                            text = if (state.comboStreak > 0) "🔥 Streak: ${state.comboStreak}" else "Streak: 0",
+                            text = if (state.comboStreak > 0) "🔥 ${uiModel.streakText}" else uiModel.streakText,
                             style = MaterialTheme.typography.labelMedium,
                             fontWeight = FontWeight.Bold,
                             color = if (state.comboStreak > 0) {
@@ -225,12 +248,7 @@ fun CallsignTrainerContent(
                 modifier = Modifier.size(20.dp)
             )
             Spacer(modifier = Modifier.width(8.dp))
-            val replayLabel = if (state.preAnswerReplayCount > 0) {
-                "Replay Audio (${state.preAnswerReplayCount})"
-            } else {
-                "Replay Audio"
-            }
-            Text(text = replayLabel)
+            Text(text = uiModel.replayButtonText)
         }
 
         // --- Input Section ---
@@ -241,7 +259,9 @@ fun CallsignTrainerContent(
             OutlinedTextField(
                 value = state.typedInput,
                 onValueChange = onTypeInput,
-                modifier = Modifier.fillMaxWidth(),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .focusRequester(focusRequester),
                 singleLine = true,
                 enabled = !state.isSubmitted,
                 label = { Text("Callsign / Exchange") },
@@ -253,7 +273,7 @@ fun CallsignTrainerContent(
                 ),
                 keyboardActions = KeyboardActions(
                     onDone = {
-                        if (state.typedInput.isNotBlank() && !state.isSubmitted) {
+                        if (uiModel.isSubmitEnabled) {
                             view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                             onSubmitInput()
                         }
@@ -266,7 +286,7 @@ fun CallsignTrainerContent(
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     onSubmitInput()
                 },
-                enabled = state.typedInput.isNotBlank() && !state.isSubmitted,
+                enabled = uiModel.isSubmitEnabled,
                 modifier = Modifier.fillMaxWidth()
             ) {
                 Text("Check")
@@ -274,8 +294,8 @@ fun CallsignTrainerContent(
         }
 
         // --- Feedback Section ---
-        if (state.isSubmitted) {
-            if (state.isCorrect) {
+        if (uiModel.isFeedbackVisible) {
+            if (uiModel.isCorrect) {
                 ElevatedCard(
                     modifier = Modifier.fillMaxWidth(),
                     colors = CardDefaults.elevatedCardColors(
@@ -294,22 +314,24 @@ fun CallsignTrainerContent(
                             verticalAlignment = Alignment.CenterVertically
                         ) {
                             Text(
-                                text = "Correct!",
+                                text = uiModel.feedbackTitle,
                                 style = MaterialTheme.typography.titleMedium,
                                 fontWeight = FontWeight.Bold,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
-                            Surface(
-                                shape = RoundedCornerShape(8.dp),
-                                color = MaterialTheme.colorScheme.primary
-                            ) {
-                                Text(
-                                    text = "+${state.earnedXp} XP",
-                                    style = MaterialTheme.typography.labelMedium,
-                                    fontWeight = FontWeight.Bold,
-                                    color = MaterialTheme.colorScheme.onPrimary,
-                                    modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
-                                )
+                            uiModel.earnedXpText?.let { earnedText ->
+                                Surface(
+                                    shape = RoundedCornerShape(8.dp),
+                                    color = MaterialTheme.colorScheme.primary
+                                ) {
+                                    Text(
+                                        text = earnedText,
+                                        style = MaterialTheme.typography.labelMedium,
+                                        fontWeight = FontWeight.Bold,
+                                        color = MaterialTheme.colorScheme.onPrimary,
+                                        modifier = Modifier.padding(horizontal = 8.dp, vertical = 4.dp)
+                                    )
+                                }
                             }
                         }
 
@@ -321,14 +343,14 @@ fun CallsignTrainerContent(
                                 color = MaterialTheme.colorScheme.onPrimaryContainer
                             )
                             Text(
-                                text = target.morsePattern,
+                                text = uiModel.morsePatternText ?: target.morsePattern,
                                 style = MaterialTheme.typography.bodyLarge,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onPrimaryContainer.copy(alpha = 0.8f)
                             )
                         }
 
-                        if (state.autoAdvanceCountdownActive) {
+                        if (uiModel.isAutoAdvancing) {
                             Row(
                                 modifier = Modifier
                                     .fillMaxWidth()
@@ -364,7 +386,7 @@ fun CallsignTrainerContent(
                         verticalArrangement = Arrangement.spacedBy(8.dp)
                     ) {
                         Text(
-                            text = "Incorrect",
+                            text = uiModel.feedbackTitle,
                             style = MaterialTheme.typography.titleMedium,
                             fontWeight = FontWeight.Bold,
                             color = MaterialTheme.colorScheme.onErrorContainer
@@ -405,29 +427,31 @@ fun CallsignTrainerContent(
 
                         state.currentTarget?.let { target ->
                             Text(
-                                text = "Expected: ${target.fullTransmissionText}",
+                                text = "Expected: ${uiModel.expectedText ?: target.fullTransmissionText}",
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontWeight = FontWeight.SemiBold,
                                 color = MaterialTheme.colorScheme.onErrorContainer
                             )
                             Text(
-                                text = target.morsePattern,
+                                text = uiModel.morsePatternText ?: target.morsePattern,
                                 style = MaterialTheme.typography.bodyMedium,
                                 fontFamily = FontFamily.Monospace,
                                 color = MaterialTheme.colorScheme.onErrorContainer.copy(alpha = 0.8f)
                             )
                         }
 
-                        Spacer(modifier = Modifier.height(4.dp))
+                        if (uiModel.isNextButtonVisible) {
+                            Spacer(modifier = Modifier.height(4.dp))
 
-                        Button(
-                            onClick = {
-                                view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                                onNextCallsign()
-                            },
-                            modifier = Modifier.fillMaxWidth()
-                        ) {
-                            Text("Next Callsign")
+                            Button(
+                                onClick = {
+                                    view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                                    onNextCallsign()
+                                },
+                                modifier = Modifier.fillMaxWidth()
+                            ) {
+                                Text("Next Callsign")
+                            }
                         }
                     }
                 }
