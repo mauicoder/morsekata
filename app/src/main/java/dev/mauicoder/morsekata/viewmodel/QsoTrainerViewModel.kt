@@ -73,9 +73,11 @@ class QsoTrainerViewModel @Inject constructor(
             category = QsoCategory.SINGLE_CODES,
             progress = trainerProgressRepository.trainerProgress.value
         )
+        val initialProgress = trainerProgressRepository.trainerProgress.value
         _callsignUiState.value = CallsignTrainerUiState(
             currentWpm = userPreferencesRepository.userPreferences.value.wpm,
-            bestWpmReached = trainerProgressRepository.trainerProgress.value.bestCallsignWpm
+            bestWpmReached = initialProgress.bestCallsignWpm,
+            comboStreak = initialProgress.currentAnswerStreak
         )
         observeTrainerProgress()
     }
@@ -93,7 +95,8 @@ class QsoTrainerViewModel @Inject constructor(
     private val _callsignUiState = MutableStateFlow(
         CallsignTrainerUiState(
             currentWpm = userPreferencesRepository.userPreferences.value.wpm,
-            bestWpmReached = trainerProgressRepository.trainerProgress.value.bestCallsignWpm
+            bestWpmReached = trainerProgressRepository.trainerProgress.value.bestCallsignWpm,
+            comboStreak = trainerProgressRepository.trainerProgress.value.currentAnswerStreak
         )
     )
     val callsignUiState: StateFlow<CallsignTrainerUiState> = _callsignUiState.asStateFlow()
@@ -119,11 +122,10 @@ class QsoTrainerViewModel @Inject constructor(
                     syncStateWithProgress(current, progress)
                 }
                 _callsignUiState.update { current ->
-                    if (progress.bestCallsignWpm > current.bestWpmReached) {
-                        current.copy(bestWpmReached = progress.bestCallsignWpm)
-                    } else {
-                        current
-                    }
+                    current.copy(
+                        bestWpmReached = maxOf(current.bestWpmReached, progress.bestCallsignWpm),
+                        comboStreak = progress.currentAnswerStreak
+                    )
                 }
             }
         }
@@ -238,6 +240,7 @@ class QsoTrainerViewModel @Inject constructor(
                     isCorrect = true,
                     diffResult = diff,
                     earnedXp = transition.xpAward.totalXpEarned,
+                    comboStreak = transition.updatedProgress.currentAnswerStreak,
                     currentWpm = newWpm,
                     bestWpmReached = newBestWpm,
                     sessionAnsweredCount = it.sessionAnsweredCount + 1,
@@ -280,6 +283,7 @@ class QsoTrainerViewModel @Inject constructor(
                     isCorrect = false,
                     diffResult = diff,
                     earnedXp = 0,
+                    comboStreak = transition.updatedProgress.currentAnswerStreak,
                     currentWpm = newWpm,
                     sessionAnsweredCount = it.sessionAnsweredCount + 1,
                     autoAdvanceCountdownActive = false

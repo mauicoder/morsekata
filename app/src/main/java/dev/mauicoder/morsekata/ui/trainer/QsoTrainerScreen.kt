@@ -60,6 +60,9 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.mauicoder.morsekata.trainer.CallsignDrillMode
+import dev.mauicoder.morsekata.trainer.CallsignSpeedMode
+import dev.mauicoder.morsekata.trainer.CallsignTrainerUiState
 import dev.mauicoder.morsekata.trainer.CategoryMasteryStat
 import dev.mauicoder.morsekata.trainer.DayActivityStatus
 import dev.mauicoder.morsekata.trainer.DayStreakCell
@@ -94,6 +97,7 @@ fun QsoTrainerScreen(
     modifier: Modifier = Modifier
 ) {
     val state by viewModel.uiState.collectAsStateWithLifecycle()
+    val callsignState by viewModel.callsignUiState.collectAsStateWithLifecycle()
     DisposableEffect(Unit) {
         onDispose {
             viewModel.stopAudio()
@@ -101,6 +105,7 @@ fun QsoTrainerScreen(
     }
     QsoTrainerScreen(
         state = state,
+        callsignState = callsignState,
         onSelectTab = viewModel::selectTab,
         onSelectCategory = viewModel::selectCategory,
         onSelectOption = viewModel::selectOption,
@@ -113,6 +118,13 @@ fun QsoTrainerScreen(
         onPracticeCategory = viewModel::practiceWeakestCategory,
         onPreviewAudio = viewModel::previewItemAudio,
         onResetProgress = viewModel::resetProgress,
+        onTypeCallsignInput = viewModel::onTypeCallsignInput,
+        onSubmitCallsignInput = viewModel::onSubmitCallsignInput,
+        onReplayCallsignAudio = viewModel::onReplayCallsignAudio,
+        onNextCallsign = viewModel::onNextCallsign,
+        onSelectCallsignDrillMode = viewModel::onSelectCallsignDrillMode,
+        onSelectCallsignSpeedMode = viewModel::onSelectCallsignSpeedMode,
+        onToggleCallsignCutNumbers = viewModel::onToggleCallsignCutNumbers,
         modifier = modifier
     )
 }
@@ -122,6 +134,7 @@ fun QsoTrainerScreen(
 @Composable
 fun QsoTrainerScreen(
     state: QsoTrainerUiState,
+    callsignState: CallsignTrainerUiState = CallsignTrainerUiState(),
     onSelectTab: (QsoTrainerTab) -> Unit,
     onSelectCategory: (QsoCategory) -> Unit,
     onSelectOption: (String) -> Unit,
@@ -134,6 +147,13 @@ fun QsoTrainerScreen(
     onPracticeCategory: (QsoCategory) -> Unit,
     onPreviewAudio: (String) -> Unit,
     onResetProgress: () -> Unit,
+    onTypeCallsignInput: (String) -> Unit = {},
+    onSubmitCallsignInput: () -> Unit = {},
+    onReplayCallsignAudio: () -> Unit = {},
+    onNextCallsign: () -> Unit = {},
+    onSelectCallsignDrillMode: (CallsignDrillMode) -> Unit = {},
+    onSelectCallsignSpeedMode: (CallsignSpeedMode) -> Unit = {},
+    onToggleCallsignCutNumbers: (Boolean) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val uiModel = remember(state) { QsoTrainerUiMapper.map(state) }
@@ -144,21 +164,18 @@ fun QsoTrainerScreen(
     ) {
         Column(modifier = Modifier.fillMaxSize()) {
             PrimaryTabRow(selectedTabIndex = uiModel.selectedTab.ordinal) {
-                Tab(
-                    selected = uiModel.selectedTab == QsoTrainerTab.PRACTICE,
-                    onClick = { onSelectTab(QsoTrainerTab.PRACTICE) },
-                    text = { Text("Code Drill") }
-                )
-                Tab(
-                    selected = uiModel.selectedTab == QsoTrainerTab.FULL_QSO,
-                    onClick = { onSelectTab(QsoTrainerTab.FULL_QSO) },
-                    text = { Text("Full QSO") }
-                )
-                Tab(
-                    selected = uiModel.selectedTab == QsoTrainerTab.STATS,
-                    onClick = { onSelectTab(QsoTrainerTab.STATS) },
-                    text = { Text("Stats") }
-                )
+                QsoTrainerTab.entries.forEach { tab ->
+                    Tab(
+                        selected = uiModel.selectedTab == tab,
+                        onClick = { onSelectTab(tab) },
+                        text = {
+                            Text(
+                                text = QsoTrainerUiMapper.tabTitle(tab),
+                                maxLines = 1
+                            )
+                        }
+                    )
+                }
             }
 
             when (uiModel.selectedTab) {
@@ -171,9 +188,16 @@ fun QsoTrainerScreen(
                     onReplayAudio = onReplayAudio,
                     onNextQuestion = onNextQuestion
                 )
-                QsoTrainerTab.CALLSIGNS -> {
-                    // CallsignTrainerContent placeholder, implemented in Ticket 03
-                }
+                QsoTrainerTab.CALLSIGNS -> CallsignTrainerContent(
+                    state = callsignState,
+                    onTypeInput = onTypeCallsignInput,
+                    onSubmitInput = onSubmitCallsignInput,
+                    onReplayAudio = onReplayCallsignAudio,
+                    onNextCallsign = onNextCallsign,
+                    onSelectDrillMode = onSelectCallsignDrillMode,
+                    onSelectSpeedMode = onSelectCallsignSpeedMode,
+                    onToggleCutNumbers = onToggleCallsignCutNumbers
+                )
                 QsoTrainerTab.FULL_QSO -> FullQsoTabContent(
                     fullQso = uiModel.fullQso,
                     onSelectQsoFieldOption = onSelectQsoFieldOption,
@@ -1295,5 +1319,43 @@ private fun FullQsoTabContentPreview() {
                 onReplayQsoStageAudio = {}
             )
         }
+    }
+}
+
+@Preview(showBackground = true)
+@Composable
+private fun QsoTrainerScreenCallsignsTabPreview() {
+    val qsoState = QsoTrainerUiState(
+        currentEntry = QsoEntry("QTH", "My location is...", QsoEntryType.SINGLE_CODE),
+        options = listOf("QTH", "QSL", "QRZ", "QRM"),
+        selectedTab = QsoTrainerTab.CALLSIGNS
+    )
+    val callsignState = CallsignTrainerUiState(
+        currentWpm = 20,
+        bestWpmReached = 24,
+        comboStreak = 5,
+        currentTarget = dev.mauicoder.morsekata.trainer.CallsignTarget(
+            callsign = "W1AW",
+            fullTransmissionText = "W1AW",
+            morsePattern = ".-- .---- .- .--"
+        )
+    )
+    MorseKataTheme {
+        QsoTrainerScreen(
+            state = qsoState,
+            callsignState = callsignState,
+            onSelectTab = {},
+            onSelectCategory = {},
+            onSelectOption = {},
+            onReplayAudio = {},
+            onNextQuestion = {},
+            onSelectQsoFieldOption = { _, _ -> },
+            onSubmitQsoStage = {},
+            onNextQsoStage = {},
+            onReplayQsoStageAudio = {},
+            onPracticeCategory = {},
+            onPreviewAudio = {},
+            onResetProgress = {}
+        )
     }
 }

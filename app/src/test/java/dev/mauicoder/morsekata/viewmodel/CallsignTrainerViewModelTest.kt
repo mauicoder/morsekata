@@ -98,6 +98,7 @@ class CallsignTrainerViewModelTest {
         assertEquals(1, state.sessionCorrectCount)
         assertEquals(21, state.currentWpm) // 20 + 1 = 21 WPM
         assertEquals(21, state.bestWpmReached)
+        assertEquals(1, state.comboStreak)
 
         // Check persisted trainer progress
         val progress = fakeProgressRepository.trainerProgress.value
@@ -169,6 +170,7 @@ class CallsignTrainerViewModelTest {
         assertEquals(1, state.sessionAnsweredCount)
         assertEquals(0, state.sessionCorrectCount)
         assertEquals(0, state.earnedXp)
+        assertEquals(0, state.comboStreak)
 
         assertNotNull(state.diffResult)
         assertFalse(state.diffResult!!.isMatch)

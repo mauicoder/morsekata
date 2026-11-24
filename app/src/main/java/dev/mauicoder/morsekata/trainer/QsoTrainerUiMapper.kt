@@ -23,6 +23,13 @@ data class QsoTrainerUiModel(
 )
 
 object QsoTrainerUiMapper {
+    fun tabTitle(tab: QsoTrainerTab): String = when (tab) {
+        QsoTrainerTab.PRACTICE -> "Code Drill"
+        QsoTrainerTab.CALLSIGNS -> "Callsigns"
+        QsoTrainerTab.FULL_QSO -> "Full QSO"
+        QsoTrainerTab.STATS -> "Stats"
+    }
+
     fun map(state: QsoTrainerUiState): QsoTrainerUiModel {
         val isAnswered = state.selectedOption != null
         val targetCode = state.currentEntry.codeOrPhrase
