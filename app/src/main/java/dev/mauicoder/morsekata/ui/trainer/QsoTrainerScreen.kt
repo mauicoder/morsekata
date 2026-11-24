@@ -171,6 +171,9 @@ fun QsoTrainerScreen(
                     onReplayAudio = onReplayAudio,
                     onNextQuestion = onNextQuestion
                 )
+                QsoTrainerTab.CALLSIGNS -> {
+                    // CallsignTrainerContent placeholder, implemented in Ticket 03
+                }
                 QsoTrainerTab.FULL_QSO -> FullQsoTabContent(
                     fullQso = uiModel.fullQso,
                     onSelectQsoFieldOption = onSelectQsoFieldOption,

@@ -27,6 +27,8 @@ class TrainerProgressSerializerTest {
         assertEquals(emptyMap<String, ItemMastery>(), defaultProgress.itemMastery)
         assertEquals(emptyMap<Long, Int>(), defaultProgress.dailyHistory)
         assertEquals(0, defaultProgress.completedFullQsoCount)
+        assertEquals(0, defaultProgress.bestCallsignWpm)
+        assertEquals(0, defaultProgress.completedCallsignCount)
     }
 
     @Test
@@ -219,5 +221,131 @@ class TrainerProgressSerializerTest {
         assertEquals(90, stage3Transition.updatedProgress.totalXp)
         assertEquals(1, stage3Transition.updatedProgress.completedFullQsoCount)
         assertEquals(3, stage3Transition.updatedProgress.currentDayAnsweredCount)
+    }
+
+    @Test
+    fun `readFrom legacy JSON without callsign metrics preserves backward compatibility with zero defaults`(): Unit = runBlocking {
+        val legacyJson = """
+            {"totalXp":200,"currentAnswerStreak":2,"bestAnswerStreak":5,"dailyStreak":1,"completedFullQsoCount":3}
+        """.trimIndent()
+        val input = ByteArrayInputStream(legacyJson.encodeToByteArray())
+        val deserialized = TrainerProgressSerializer.readFrom(input)
+
+        assertEquals(200, deserialized.totalXp)
+        assertEquals(2, deserialized.currentAnswerStreak)
+        assertEquals(3, deserialized.completedFullQsoCount)
+        assertEquals(0, deserialized.bestCallsignWpm)
+        assertEquals(0, deserialized.completedCallsignCount)
+    }
+
+    @Test
+    fun `writeTo and readFrom round-trip TrainerProgress with bestCallsignWpm and completedCallsignCount`(): Unit = runBlocking {
+        val progress = TrainerProgress(
+            totalXp = 320,
+            currentAnswerStreak = 4,
+            bestAnswerStreak = 7,
+            completedFullQsoCount = 2,
+            bestCallsignWpm = 28,
+            completedCallsignCount = 15
+        )
+        val output = ByteArrayOutputStream()
+        TrainerProgressSerializer.writeTo(progress, output)
+
+        val deserialized = TrainerProgressSerializer.readFrom(ByteArrayInputStream(output.toByteArray()))
+        assertEquals(progress, deserialized)
+        assertEquals(28, deserialized.bestCallsignWpm)
+        assertEquals(15, deserialized.completedCallsignCount)
+    }
+
+    @Test
+    fun `recordCallsignAnswer awards base XP, streak bonus, first-copy bonus, and updates callsign count and best WPM`() {
+        val initial = TrainerProgress(
+            totalXp = 50,
+            currentAnswerStreak = 2,
+            bestAnswerStreak = 2,
+            bestCallsignWpm = 20,
+            completedCallsignCount = 3,
+            currentDayEpochDay = 300L,
+            currentDayAnsweredCount = 1
+        )
+
+        // Callsign only correct with 0 replays -> 10 base + 4 streak ((3-1)*2) + 5 first-copy = 19 XP
+        val transition = initial.recordCallsignAnswer(
+            isCorrect = true,
+            isContestExchange = false,
+            preAnswerReplayCount = 0,
+            achievedWpm = 25,
+            todayEpochDay = 300L,
+            dailyGoalTarget = 5
+        )
+
+        assertEquals(10, transition.xpAward.baseXp)
+        assertEquals(4, transition.xpAward.streakBonusXp)
+        assertEquals(5, transition.xpAward.firstCopyBonusXp)
+        assertEquals(19, transition.xpAward.totalXpEarned)
+
+        val updated = transition.updatedProgress
+        assertEquals(69, updated.totalXp)
+        assertEquals(3, updated.currentAnswerStreak)
+        assertEquals(3, updated.bestAnswerStreak)
+        assertEquals(25, updated.bestCallsignWpm)
+        assertEquals(4, updated.completedCallsignCount)
+        assertEquals(2, updated.currentDayAnsweredCount)
+    }
+
+    @Test
+    fun `recordCallsignAnswer in contest exchange awards 15 base XP and does not award first-copy bonus if replayed`() {
+        val initial = TrainerProgress(
+            totalXp = 100,
+            currentAnswerStreak = 0,
+            bestCallsignWpm = 24,
+            completedCallsignCount = 5
+        )
+
+        val transition = initial.recordCallsignAnswer(
+            isCorrect = true,
+            isContestExchange = true,
+            preAnswerReplayCount = 1,
+            achievedWpm = 22,
+            todayEpochDay = 300L,
+            dailyGoalTarget = 5
+        )
+
+        assertEquals(15, transition.xpAward.baseXp)
+        assertEquals(0, transition.xpAward.streakBonusXp)
+        assertEquals(0, transition.xpAward.firstCopyBonusXp)
+        assertEquals(15, transition.xpAward.totalXpEarned)
+
+        val updated = transition.updatedProgress
+        assertEquals(115, updated.totalXp)
+        assertEquals(1, updated.currentAnswerStreak)
+        assertEquals(24, updated.bestCallsignWpm) // 22 < 24, keeps 24
+        assertEquals(6, updated.completedCallsignCount)
+    }
+
+    @Test
+    fun `recordCallsignAnswer on incorrect resets streak and does not increment completed callsigns`() {
+        val initial = TrainerProgress(
+            totalXp = 100,
+            currentAnswerStreak = 5,
+            bestCallsignWpm = 24,
+            completedCallsignCount = 5
+        )
+
+        val transition = initial.recordCallsignAnswer(
+            isCorrect = false,
+            isContestExchange = false,
+            preAnswerReplayCount = 0,
+            achievedWpm = 20,
+            todayEpochDay = 300L,
+            dailyGoalTarget = 5
+        )
+
+        assertEquals(0, transition.xpAward.totalXpEarned)
+        val updated = transition.updatedProgress
+        assertEquals(100, updated.totalXp)
+        assertEquals(0, updated.currentAnswerStreak)
+        assertEquals(5, updated.completedCallsignCount)
+        assertEquals(24, updated.bestCallsignWpm)
     }
 }

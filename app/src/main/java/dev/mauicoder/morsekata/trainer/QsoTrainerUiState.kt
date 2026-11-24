@@ -31,6 +31,8 @@ data class QsoTrainerUiState(
     val dailyHistory: Map<Long, Int> = emptyMap(),
     val itemMastery: Map<String, ItemMastery> = emptyMap(),
     val completedFullQsoCount: Int = 0,
+    val bestCallsignWpm: Int = 0,
+    val completedCallsignCount: Int = 0,
     val fullQsoSession: FullQsoSession = QsoExchangeGenerator.generateSession(Random(0)),
     val currentQsoStage: QsoStage = QsoStage.CQ_CALL,
     val selectedQsoFieldOptions: Map<QsoExchangeFieldType, String> = emptyMap(),
