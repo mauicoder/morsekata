@@ -16,5 +16,6 @@ data class CallsignTrainerUiState(
     val sessionAnsweredCount: Int = 0,
     val sessionCorrectCount: Int = 0,
     val autoAdvanceCountdownActive: Boolean = false,
-    val earnedXp: Int = 0
+    val earnedXp: Int = 0,
+    val comboStreak: Int = 0
 )
