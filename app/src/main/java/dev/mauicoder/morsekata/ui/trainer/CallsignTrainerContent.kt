@@ -10,6 +10,7 @@ import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.imePadding
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -41,6 +42,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.platform.LocalSoftwareKeyboardController
 import androidx.compose.ui.platform.LocalView
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.SpanStyle
@@ -77,6 +79,7 @@ fun CallsignTrainerContent(
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
+    val keyboardController = LocalSoftwareKeyboardController.current
     val uiModel = remember(state) { CallsignTrainerUiMapper.map(state) }
     val focusRequester = remember { FocusRequester() }
 
@@ -104,6 +107,7 @@ fun CallsignTrainerContent(
     Column(
         modifier = modifier
             .fillMaxSize()
+            .imePadding()
             .verticalScroll(rememberScrollState())
             .padding(16.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
@@ -252,15 +256,16 @@ fun CallsignTrainerContent(
         }
 
         // --- Input Section ---
-        Column(
+        Row(
             modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(8.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
             OutlinedTextField(
                 value = state.typedInput,
                 onValueChange = onTypeInput,
                 modifier = Modifier
-                    .fillMaxWidth()
+                    .weight(1f)
                     .focusRequester(focusRequester),
                 singleLine = true,
                 enabled = !state.isSubmitted,
@@ -275,6 +280,7 @@ fun CallsignTrainerContent(
                     onDone = {
                         if (uiModel.isSubmitEnabled) {
                             view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            keyboardController?.hide()
                             onSubmitInput()
                         }
                     }
@@ -284,10 +290,11 @@ fun CallsignTrainerContent(
             Button(
                 onClick = {
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                    keyboardController?.hide()
                     onSubmitInput()
                 },
                 enabled = uiModel.isSubmitEnabled,
-                modifier = Modifier.fillMaxWidth()
+                modifier = Modifier.padding(top = 8.dp)
             ) {
                 Text("Check")
             }
