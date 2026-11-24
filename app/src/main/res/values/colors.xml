@@ -4,4 +4,5 @@
     <color name="white">#FFFFFFFF</color>
     <color name="my_light_primary">#618EE9</color>
     <color name="my_dark_primary">#618EE9</color>
+    <color name="ic_launcher_background">#151B29</color>
 </resources>
