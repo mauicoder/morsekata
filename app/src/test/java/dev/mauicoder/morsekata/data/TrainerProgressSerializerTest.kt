@@ -366,4 +366,59 @@ class TrainerProgressSerializerTest {
 
         assertEquals(0, transition.updatedProgress.bestCallsignWpm)
     }
+
+    @Test
+    fun `readFrom version 1 progress JSON without callsign or QSO fields successfully migrates preserving all stats`(): Unit = runBlocking {
+        val v1Json = """
+            {
+                "totalXp": 1250,
+                "currentAnswerStreak": 7,
+                "bestAnswerStreak": 15,
+                "dailyStreak": 5,
+                "currentDayEpochDay": 20412,
+                "currentDayAnsweredCount": 12,
+                "lastGoalCompletedEpochDay": 20411,
+                "itemMastery": {
+                    "SOS": {"attempts": 10, "correct": 9, "consecutiveCorrect": 5},
+                    "CQ": {"attempts": 8, "correct": 8, "consecutiveCorrect": 8}
+                }
+            }
+        """.trimIndent()
+
+        val input = ByteArrayInputStream(v1Json.encodeToByteArray())
+        val migrated = TrainerProgressSerializer.readFrom(input)
+
+        // All existing historical stats must be fully intact
+        assertEquals(1250, migrated.totalXp)
+        assertEquals(7, migrated.currentAnswerStreak)
+        assertEquals(15, migrated.bestAnswerStreak)
+        assertEquals(5, migrated.dailyStreak)
+        assertEquals(20412L, migrated.currentDayEpochDay)
+        assertEquals(12, migrated.currentDayAnsweredCount)
+        assertEquals(20411L, migrated.lastGoalCompletedEpochDay)
+        assertEquals(2, migrated.itemMastery.size)
+        assertEquals(9, migrated.itemMastery["SOS"]?.correct)
+        assertEquals(8, migrated.itemMastery["CQ"]?.correct)
+
+        // New fields cleanly default to zero without crashing or throwing
+        assertEquals(0, migrated.completedFullQsoCount)
+        assertEquals(0, migrated.bestCallsignWpm)
+        assertEquals(0, migrated.completedCallsignCount)
+
+        // Recording a new callsign activity keeps previous XP and updates stats
+        val transition = migrated.recordCallsignAnswer(
+            isCorrect = true,
+            isContestExchange = false,
+            preAnswerReplayCount = 0,
+            achievedWpm = 22,
+            todayEpochDay = 20412L,
+            dailyGoalTarget = 10
+        )
+
+        // 1250 + 10 base + 10 streak bonus + 5 first-copy = 1275 XP
+        assertEquals(1275, transition.updatedProgress.totalXp)
+        assertEquals(22, transition.updatedProgress.bestCallsignWpm)
+        assertEquals(1, transition.updatedProgress.completedCallsignCount)
+        assertEquals(9, transition.updatedProgress.itemMastery["SOS"]?.correct)
+    }
 }

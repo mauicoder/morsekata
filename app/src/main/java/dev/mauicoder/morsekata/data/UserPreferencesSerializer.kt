@@ -13,9 +13,14 @@ object UserPreferencesSerializer : Serializer<UserPreferences> {
 
     override val defaultValue: UserPreferences = UserPreferences()
 
+    private val json = Json {
+        ignoreUnknownKeys = true
+        encodeDefaults = true
+    }
+
     override suspend fun readFrom(input: InputStream): UserPreferences {
         try {
-            return Json.decodeFromString(
+            return json.decodeFromString(
                 UserPreferences.serializer(), input.readBytes().decodeToString()
             )
         } catch (serialization: SerializationException) {
@@ -24,10 +29,9 @@ object UserPreferencesSerializer : Serializer<UserPreferences> {
     }
 
     override suspend fun writeTo(t: UserPreferences, output: OutputStream) {
-        // Move the blocking I/O operation to the IO dispatcher
         withContext(Dispatchers.IO) {
             output.write(
-                Json.encodeToString(UserPreferences.serializer(), t).encodeToByteArray()
+                json.encodeToString(UserPreferences.serializer(), t).encodeToByteArray()
             )
         }
     }

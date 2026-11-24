@@ -43,7 +43,7 @@ abstract class DataStoreModule {
             return DataStoreFactory.create(
                 serializer = UserPreferencesSerializer,
                 produceFile = { appContext.dataStoreFile(DATA_STORE_FILE_NAME) },
-                corruptionHandler = null,
+                corruptionHandler = ReplaceFileCorruptionHandler { UserPreferences() },
                 scope = CoroutineScope(Dispatchers.IO + SupervisorJob())
             )
         }
