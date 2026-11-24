@@ -235,5 +235,8 @@ data class QsoStatsUiModel(
     val fullPhrasesMastery: CategoryMasteryStat,
     val recommendedCategory: QsoCategory,
     val weakItems: List<WeakItemStat>,
-    val completedFullQsoCount: Int = 0
+    val completedFullQsoCount: Int = 0,
+    val bestCallsignWpm: Int = 0,
+    val bestCallsignWpmText: String = "—",
+    val completedCallsignCount: Int = 0
 )

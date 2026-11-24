@@ -27,6 +27,20 @@ class CallsignTrainerUiTest {
     }
 
     @Test
+    fun statsTab_includesCallsignMilestones() {
+        val state = dev.mauicoder.morsekata.trainer.QsoTrainerUiState(
+            currentEntry = dev.mauicoder.morsekata.trainer.QsoEntry("QTH", "My location is...", dev.mauicoder.morsekata.trainer.QsoEntryType.SINGLE_CODE),
+            options = listOf("QTH"),
+            bestCallsignWpm = 25,
+            completedCallsignCount = 12
+        )
+        val uiModel = QsoTrainerUiMapper.map(state)
+        assertEquals(25, uiModel.stats.bestCallsignWpm)
+        assertEquals("25 WPM", uiModel.stats.bestCallsignWpmText)
+        assertEquals(12, uiModel.stats.completedCallsignCount)
+    }
+
+    @Test
     fun idleReadyState_displaysDefaultMetricsAndDisabledSubmit() {
         val target = CallsignTarget(
             callsign = "W1AW",
