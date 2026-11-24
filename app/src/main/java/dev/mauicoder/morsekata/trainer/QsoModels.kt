@@ -85,6 +85,7 @@ data class XpAward(
 
 enum class QsoTrainerTab {
     PRACTICE,
+    CALLSIGNS,
     FULL_QSO,
     STATS
 }

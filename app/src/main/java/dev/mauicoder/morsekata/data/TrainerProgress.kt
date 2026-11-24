@@ -23,7 +23,9 @@ data class TrainerProgress(
     val lastGoalCompletedEpochDay: Long? = null,
     val itemMastery: Map<String, ItemMastery> = emptyMap(),
     val dailyHistory: Map<Long, Int> = emptyMap(),
-    val completedFullQsoCount: Int = 0
+    val completedFullQsoCount: Int = 0,
+    val bestCallsignWpm: Int = 0,
+    val completedCallsignCount: Int = 0
 ) {
     fun effectiveEpochDay(todayEpochDay: Long): Long {
         return if (currentDayEpochDay != null && todayEpochDay < currentDayEpochDay) {
@@ -126,13 +128,55 @@ data class TrainerProgress(
         )
     }
 
+    fun recordCallsignAnswer(
+        isCorrect: Boolean,
+        isContestExchange: Boolean,
+        preAnswerReplayCount: Int,
+        achievedWpm: Int,
+        todayEpochDay: Long,
+        dailyGoalTarget: Int
+    ): AnswerProgressTransition {
+        val newAnswerStreak = if (isCorrect) currentAnswerStreak + 1 else 0
+        val baseXp = if (isCorrect) {
+            if (isContestExchange) 15 else 10
+        } else {
+            0
+        }
+        val streakBonusXp = if (isCorrect) {
+            minOf((newAnswerStreak - 1).coerceAtLeast(0) * 2, 10)
+        } else {
+            0
+        }
+        val firstCopyBonusXp = if (isCorrect && preAnswerReplayCount == 0) 5 else 0
+        val xpAward = XpAward(
+            baseXp = baseXp,
+            streakBonusXp = streakBonusXp,
+            firstCopyBonusXp = firstCopyBonusXp
+        )
+        val updatedCompletedCount = if (isCorrect) completedCallsignCount + 1 else completedCallsignCount
+        val updatedBestWpm = maxOf(bestCallsignWpm, achievedWpm)
+
+        return applyChallengeCompletion(
+            newAnswerStreak = newAnswerStreak,
+            xpAward = xpAward,
+            updatedMasteryMap = itemMastery,
+            updatedCompletedFullQsoCount = completedFullQsoCount,
+            todayEpochDay = todayEpochDay,
+            dailyGoalTarget = dailyGoalTarget,
+            updatedBestCallsignWpm = updatedBestWpm,
+            updatedCompletedCallsignCount = updatedCompletedCount
+        )
+    }
+
     private fun applyChallengeCompletion(
         newAnswerStreak: Int,
         xpAward: XpAward,
         updatedMasteryMap: Map<String, ItemMastery>,
         updatedCompletedFullQsoCount: Int,
         todayEpochDay: Long,
-        dailyGoalTarget: Int
+        dailyGoalTarget: Int,
+        updatedBestCallsignWpm: Int = bestCallsignWpm,
+        updatedCompletedCallsignCount: Int = completedCallsignCount
     ): AnswerProgressTransition {
         val newBestStreak = maxOf(bestAnswerStreak, newAnswerStreak)
         val previousRank = OperatorRank.fromXp(totalXp)
@@ -185,7 +229,9 @@ data class TrainerProgress(
             lastGoalCompletedEpochDay = newLastGoalCompletedEpochDay,
             itemMastery = updatedMasteryMap,
             dailyHistory = updatedDailyHistory,
-            completedFullQsoCount = updatedCompletedFullQsoCount
+            completedFullQsoCount = updatedCompletedFullQsoCount,
+            bestCallsignWpm = updatedBestCallsignWpm,
+            completedCallsignCount = updatedCompletedCallsignCount
         )
 
         return AnswerProgressTransition(
