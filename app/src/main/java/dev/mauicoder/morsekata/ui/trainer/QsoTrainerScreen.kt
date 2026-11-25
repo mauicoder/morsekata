@@ -230,204 +230,213 @@ fun PracticeTabContent(
 ) {
     val view = LocalView.current
     val categories = QsoCategory.entries
+    val scrollState = rememberScrollState()
 
     Column(
         modifier = modifier
             .fillMaxSize()
-            .verticalScroll(rememberScrollState())
-            .padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .padding(horizontal = 16.dp, vertical = 12.dp)
     ) {
-        SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
-            categories.forEachIndexed { index, category ->
-                SegmentedButton(
-                    shape = SegmentedButtonDefaults.itemShape(index = index, count = categories.size),
-                    onClick = {
-                        if (selectedCategory != category) {
-                            onSelectCategory(category)
-                        }
-                    },
-                    selected = selectedCategory == category
-                ) {
-                    Text(
-                        text = category.displayName,
-                        style = MaterialTheme.typography.labelLarge
-                    )
-                }
-            }
-        }
-
-        ElevatedCard(modifier = Modifier.fillMaxWidth()) {
-            Column(
-                modifier = Modifier
-                    .fillMaxWidth()
-                    .padding(14.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
-            ) {
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween,
-                    verticalAlignment = Alignment.CenterVertically
-                ) {
-                    Text(
-                        text = uiModel.rankText,
-                        style = MaterialTheme.typography.titleSmall,
-                        fontWeight = FontWeight.Bold
-                    )
-                    Text(
-                        text = uiModel.xpText,
-                        style = MaterialTheme.typography.labelLarge,
-                        color = MaterialTheme.colorScheme.primary
-                    )
-                }
-
-                LinearProgressIndicator(
-                    progress = { uiModel.stats.rankProgressFraction },
-                    modifier = Modifier
-                        .fillMaxWidth()
-                        .height(8.dp)
-                        .clip(RoundedCornerShape(4.dp))
-                )
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = uiModel.scoreText,
-                        style = MaterialTheme.typography.bodyMedium
-                    )
-                    Text(
-                        text = uiModel.streakText,
-                        style = MaterialTheme.typography.bodyMedium,
-                        fontWeight = FontWeight.Medium
-                    )
-                }
-
-                Row(
-                    modifier = Modifier.fillMaxWidth(),
-                    horizontalArrangement = Arrangement.SpaceBetween
-                ) {
-                    Text(
-                        text = uiModel.dailyStreakText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                    Text(
-                        text = uiModel.masteryText,
-                        style = MaterialTheme.typography.bodySmall,
-                        color = MaterialTheme.colorScheme.onSurfaceVariant
-                    )
-                }
-            }
-        }
-
-        Button(
-            onClick = onReplayAudio,
-            modifier = Modifier.fillMaxWidth()
+        Column(
+            modifier = Modifier
+                .weight(1f)
+                .verticalScroll(scrollState),
+            verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text("Replay Audio")
-        }
+            SingleChoiceSegmentedButtonRow(modifier = Modifier.fillMaxWidth()) {
+                categories.forEachIndexed { index, category ->
+                    SegmentedButton(
+                        shape = SegmentedButtonDefaults.itemShape(index = index, count = categories.size),
+                        onClick = {
+                            if (selectedCategory != category) {
+                                onSelectCategory(category)
+                            }
+                        },
+                        selected = selectedCategory == category
+                    ) {
+                        Text(
+                            text = category.displayName,
+                            style = MaterialTheme.typography.labelLarge
+                        )
+                    }
+                }
+            }
 
-        if (uiModel.morsePatternText.isNotEmpty() || uiModel.meaningText.isNotEmpty()) {
-            OutlinedCard(modifier = Modifier.fillMaxWidth()) {
+            ElevatedCard(modifier = Modifier.fillMaxWidth()) {
                 Column(
                     modifier = Modifier
                         .fillMaxWidth()
-                        .padding(12.dp),
-                    horizontalAlignment = Alignment.CenterHorizontally,
-                    verticalArrangement = Arrangement.spacedBy(4.dp)
+                        .padding(horizontal = 14.dp, vertical = 10.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
                 ) {
-                    if (uiModel.morsePatternText.isNotEmpty()) {
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Row(
+                            horizontalArrangement = Arrangement.spacedBy(8.dp),
+                            verticalAlignment = Alignment.CenterVertically
+                        ) {
+                            Text(
+                                text = uiModel.rankText,
+                                style = MaterialTheme.typography.titleSmall,
+                                fontWeight = FontWeight.Bold
+                            )
+                            Text(
+                                text = "•",
+                                style = MaterialTheme.typography.titleSmall,
+                                color = MaterialTheme.colorScheme.onSurfaceVariant
+                            )
+                            Text(
+                                text = uiModel.xpText,
+                                style = MaterialTheme.typography.labelLarge,
+                                color = MaterialTheme.colorScheme.primary
+                            )
+                        }
                         Text(
-                            text = uiModel.morsePatternText,
-                            style = MaterialTheme.typography.titleMedium,
-                            fontFamily = FontFamily.Monospace,
-                            textAlign = TextAlign.Center
+                            text = uiModel.streakText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.Medium
                         )
                     }
-                    if (uiModel.meaningText.isNotEmpty()) {
+
+                    LinearProgressIndicator(
+                        progress = { uiModel.stats.rankProgressFraction },
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .height(6.dp)
+                            .clip(RoundedCornerShape(3.dp))
+                    )
+
+                    Row(
+                        modifier = Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.SpaceBetween,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
                         Text(
-                            text = uiModel.meaningText,
-                            style = MaterialTheme.typography.bodyMedium,
-                            textAlign = TextAlign.Center,
+                            text = uiModel.scoreText,
+                            style = MaterialTheme.typography.bodySmall
+                        )
+                        Text(
+                            text = uiModel.dailyStreakText,
+                            style = MaterialTheme.typography.bodySmall,
+                            color = MaterialTheme.colorScheme.onSurfaceVariant
+                        )
+                        Text(
+                            text = uiModel.masteryText,
+                            style = MaterialTheme.typography.bodySmall,
                             color = MaterialTheme.colorScheme.onSurfaceVariant
                         )
                     }
                 }
             }
-        }
 
-        Column(
-            modifier = Modifier.fillMaxWidth(),
-            verticalArrangement = Arrangement.spacedBy(8.dp)
-        ) {
-            uiModel.optionStates.forEach { optionState ->
-                val highlightColor = when (optionState.highlightState) {
-                    OptionHighlightState.CORRECT -> CorrectGreen
-                    OptionHighlightState.INCORRECT -> IncorrectRed
-                    OptionHighlightState.DEFAULT -> null
-                }
-
-                val buttonColors = if (highlightColor != null) {
-                    ButtonDefaults.buttonColors(
-                        containerColor = highlightColor,
-                        contentColor = Color.White,
-                        disabledContainerColor = highlightColor,
-                        disabledContentColor = Color.White
-                    )
-                } else {
-                    ButtonDefaults.buttonColors()
-                }
-
-                Button(
-                    onClick = {
-                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
-                        onSelectOption(optionState.text)
-                    },
-                    enabled = uiModel.areOptionsEnabled,
-                    colors = buttonColors,
-                    modifier = Modifier.fillMaxWidth()
-                ) {
-                    Text(
-                        text = optionState.text,
-                        style = MaterialTheme.typography.bodyLarge
-                    )
-                }
-            }
-        }
-
-        if (uiModel.feedbackText.isNotEmpty()) {
-            val bannerColor = when (isCorrect) {
-                true -> CorrectGreen.copy(alpha = 0.14f)
-                false -> IncorrectRed.copy(alpha = 0.14f)
-                null -> MaterialTheme.colorScheme.surfaceVariant
-            }
-            val bannerTextColor = when (isCorrect) {
-                true -> CorrectGreen
-                false -> IncorrectRed
-                null -> MaterialTheme.colorScheme.onSurfaceVariant
-            }
-            Surface(
-                modifier = Modifier.fillMaxWidth(),
-                shape = RoundedCornerShape(8.dp),
-                color = bannerColor
+            Button(
+                onClick = onReplayAudio,
+                modifier = Modifier.fillMaxWidth()
             ) {
-                Text(
-                    text = uiModel.feedbackText,
-                    style = MaterialTheme.typography.bodyMedium,
-                    fontWeight = FontWeight.SemiBold,
-                    color = bannerTextColor,
-                    textAlign = TextAlign.Center,
-                    modifier = Modifier.padding(12.dp)
-                )
+                Text("Replay Audio")
+            }
+
+            Column(
+                modifier = Modifier.fillMaxWidth(),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                uiModel.optionStates.forEach { optionState ->
+                    val highlightColor = when (optionState.highlightState) {
+                        OptionHighlightState.CORRECT -> CorrectGreen
+                        OptionHighlightState.INCORRECT -> IncorrectRed
+                        OptionHighlightState.DEFAULT -> null
+                    }
+
+                    val buttonColors = if (highlightColor != null) {
+                        ButtonDefaults.buttonColors(
+                            containerColor = highlightColor,
+                            contentColor = Color.White,
+                            disabledContainerColor = highlightColor,
+                            disabledContentColor = Color.White
+                        )
+                    } else {
+                        ButtonDefaults.buttonColors()
+                    }
+
+                    Button(
+                        onClick = {
+                            view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                            onSelectOption(optionState.text)
+                        },
+                        enabled = uiModel.areOptionsEnabled,
+                        colors = buttonColors,
+                        modifier = Modifier.fillMaxWidth()
+                    ) {
+                        Text(
+                            text = optionState.text,
+                            style = MaterialTheme.typography.bodyLarge
+                        )
+                    }
+                }
+            }
+
+            if (uiModel.feedbackText.isNotEmpty()) {
+                val bannerColor = when (isCorrect) {
+                    true -> CorrectGreen.copy(alpha = 0.14f)
+                    false -> IncorrectRed.copy(alpha = 0.14f)
+                    null -> MaterialTheme.colorScheme.surfaceVariant
+                }
+                val bannerTextColor = when (isCorrect) {
+                    true -> CorrectGreen
+                    false -> IncorrectRed
+                    null -> MaterialTheme.colorScheme.onSurfaceVariant
+                }
+                Surface(
+                    modifier = Modifier.fillMaxWidth(),
+                    shape = RoundedCornerShape(8.dp),
+                    color = bannerColor
+                ) {
+                    Column(
+                        modifier = Modifier
+                            .fillMaxWidth()
+                            .padding(horizontal = 12.dp, vertical = 8.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(4.dp)
+                    ) {
+                        Text(
+                            text = uiModel.feedbackText,
+                            style = MaterialTheme.typography.bodyMedium,
+                            fontWeight = FontWeight.SemiBold,
+                            color = bannerTextColor,
+                            textAlign = TextAlign.Center
+                        )
+                        if (uiModel.morsePatternText.isNotEmpty()) {
+                            Text(
+                                text = uiModel.morsePatternText,
+                                style = MaterialTheme.typography.titleMedium,
+                                fontFamily = FontFamily.Monospace,
+                                fontWeight = FontWeight.Bold,
+                                textAlign = TextAlign.Center,
+                                color = bannerTextColor
+                            )
+                        }
+                        if (uiModel.meaningText.isNotEmpty()) {
+                            Text(
+                                text = uiModel.meaningText,
+                                style = MaterialTheme.typography.bodyMedium,
+                                textAlign = TextAlign.Center,
+                                color = bannerTextColor.copy(alpha = 0.9f)
+                            )
+                        }
+                    }
+                }
             }
         }
 
-        OutlinedButton(
+        Button(
             onClick = onNextQuestion,
             enabled = uiModel.isNextEnabled,
-            modifier = Modifier.fillMaxWidth()
+            modifier = Modifier
+                .fillMaxWidth()
+                .padding(top = 8.dp)
         ) {
             Text("Next Question")
         }
