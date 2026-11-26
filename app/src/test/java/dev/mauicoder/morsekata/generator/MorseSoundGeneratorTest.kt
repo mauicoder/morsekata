@@ -33,10 +33,10 @@ class MorseSoundGeneratorTest {
     }
 
     @Test
-    fun `generate applies default 20ms padding and asymmetric 10ms attack 14ms release Blackman-Harris envelope`() {
+    fun `generate applies 20ms padding and asymmetric 10ms attack 14ms release Blackman-Harris envelope`() {
         val wpm = 20
         val dotSamples = dotSamplesForWpm(wpm) // 60ms = 2646 samples
-        val padSamples = msToSamples(MorseSoundGenerator.PADDING_SILENCE_MS) // 20ms = 882 samples
+        val padSamples = msToSamples(20) // 20ms = 882 samples
         val attackSamples = msToSamples(10) // 10ms = 441 samples
         val releaseSamples = msToSamples(14) // 14ms = 617 samples
 
@@ -95,38 +95,15 @@ class MorseSoundGeneratorTest {
     }
 
     @Test
-    fun `generate supports custom leading and trailing silence padding for playback`() {
-        val wpm = 20
-        val dotSamples = dotSamplesForWpm(wpm)
-        val leadSamples = msToSamples(MorseSoundGenerator.PLAYBACK_LEADING_SILENCE_MS)
-        val tailSamples = msToSamples(MorseSoundGenerator.PLAYBACK_TRAILING_SILENCE_MS)
-
-        val samples = generator.generate(
-            text = "E",
-            wpm = wpm,
-            farnsworthWpm = wpm,
-            frequency = frequency,
-            sampleRate = sampleRate,
-            leadingSilenceMs = MorseSoundGenerator.PLAYBACK_LEADING_SILENCE_MS,
-            trailingSilenceMs = MorseSoundGenerator.PLAYBACK_TRAILING_SILENCE_MS
-        )
-        assertEquals(leadSamples + dotSamples + tailSamples, samples.size)
-
-        // Verify leading silence contains 0s
-        for (i in 0 until leadSamples) {
-            assertEquals(0, samples[i].toInt())
-        }
-        // Verify trailing silence contains 0s
-        for (i in (leadSamples + dotSamples) until samples.size) {
-            assertEquals(0, samples[i].toInt())
-        }
-    }
-
-    @Test
     fun `generate maintains continuous oscillator phase across multiple symbols`() {
+        // Use a frequency where phase at the start of the second symbol is distinctly different from phase = 0
+        // At sampleRate = 44100, wpm = 20:
+        // padSamples = 882, dotSamples = 2646, intraPause = 2646 -> second symbol starts at globalIndex = 6174
+        // Pick frequency = 715 Hz so 6174 * 715 / 44100 = 100.10034 cycles (fractional phase != 0)
+        // Whereas localIndex = 0 would have phase = 0.0
         val testFreq = 715
         val wpm = 20
-        val padSamples = msToSamples(MorseSoundGenerator.PADDING_SILENCE_MS) // 882
+        val padSamples = msToSamples(20) // 882
         val dotSamples = dotSamplesForWpm(wpm) // 2646
         val intraPause = dotSamples // 2646
         val attackSamples = msToSamples(10) // 441
@@ -155,7 +132,7 @@ class MorseSoundGeneratorTest {
         // At 120 WPM, dotDuration = 10ms (< 10ms attack + 14ms release = 24ms)
         val wpm = 120
         val dotSamples = dotSamplesForWpm(wpm) // 10ms = 441 samples
-        val padSamples = msToSamples(MorseSoundGenerator.PADDING_SILENCE_MS) // 882 samples
+        val padSamples = msToSamples(20) // 882 samples
         val samples = generator.generate("E", wpm, wpm, frequency, sampleRate)
 
         assertEquals(padSamples + dotSamples + padSamples, samples.size)
@@ -179,7 +156,7 @@ class MorseSoundGeneratorTest {
         val farnDotSamples = dotSamplesForWpm(farnsworthWpm) // 5292
         val interCharPauseSamples = 3 * farnDotSamples // 15876
         val interWordPauseSamples = 7 * farnDotSamples // 37044
-        val padSamples = msToSamples(MorseSoundGenerator.PADDING_SILENCE_MS) // 882
+        val padSamples = msToSamples(20) // 882
 
         // "A" = ".-" -> pad + dot + intra + dash + pad
         val aSamples = generator.generate("A", wpm, farnsworthWpm, frequency, sampleRate)

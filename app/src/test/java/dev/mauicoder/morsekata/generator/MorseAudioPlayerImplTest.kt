@@ -85,15 +85,7 @@ class MorseAudioPlayerImplTest {
         val sink = FakeAudioTrackSink(autoAdvanceHead = true, onReleaseLatch = releaseLatch)
         val generator = MorseSoundGenerator()
         val prefs = UserPreferences(frequency = 700, wpm = 20, farnsworthWpm = 20)
-        val expectedSamples = generator.generate(
-            text = "E",
-            wpm = prefs.wpm,
-            farnsworthWpm = prefs.farnsworthWpm,
-            frequency = prefs.frequency,
-            sampleRate = 44100,
-            leadingSilenceMs = MorseSoundGenerator.PLAYBACK_LEADING_SILENCE_MS,
-            trailingSilenceMs = MorseSoundGenerator.PLAYBACK_TRAILING_SILENCE_MS
-        )
+        val expectedSamples = generator.generate("E", prefs.wpm, prefs.farnsworthWpm, prefs.frequency, 44100)
 
         val player = MorseAudioPlayerImpl(
             morseSoundGenerator = generator,

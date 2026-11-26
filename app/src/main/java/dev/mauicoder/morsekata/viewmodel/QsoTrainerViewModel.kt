@@ -1,6 +1,5 @@
 package dev.mauicoder.morsekata.viewmodel
 
-import android.util.Log
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -133,7 +132,6 @@ class QsoTrainerViewModel @Inject constructor(
     }
 
     fun selectCategory(category: QsoCategory) {
-        Log.d("QsoTrainerViewModel", "selectCategory called: $category")
         morseAudioPlayer.stop()
         val progress = trainerProgressRepository.trainerProgress.value
         _uiState.update { current ->
@@ -448,7 +446,6 @@ class QsoTrainerViewModel @Inject constructor(
                 dailyGoalJustCompleted = false
             )
         }
-        Log.d("QsoTrainerViewModel", "nextQuestion: codeOrPhrase='${nextState.currentEntry.codeOrPhrase}', options=${nextState.options}")
         morseAudioPlayer.play(nextState.currentEntry.codeOrPhrase, userPreferences.value)
     }
 
@@ -460,7 +457,6 @@ class QsoTrainerViewModel @Inject constructor(
                 current
             }
         }
-        Log.d("QsoTrainerViewModel", "replayAudio: codeOrPhrase='${_uiState.value.currentEntry.codeOrPhrase}'")
         morseAudioPlayer.play(_uiState.value.currentEntry.codeOrPhrase, userPreferences.value)
     }
 
