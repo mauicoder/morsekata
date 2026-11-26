@@ -22,12 +22,14 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.AssistChip
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ElevatedCard
 import androidx.compose.material3.ExperimentalMaterial3Api
 import androidx.compose.material3.HorizontalDivider
+import androidx.compose.material3.Icon
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.OutlinedButton
@@ -52,6 +54,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalView
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontFamily
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -60,6 +63,7 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
+import dev.mauicoder.morsekata.R
 import dev.mauicoder.morsekata.trainer.CallsignDrillMode
 import dev.mauicoder.morsekata.trainer.CallsignSpeedMode
 import dev.mauicoder.morsekata.trainer.CallsignTrainerUiState
@@ -115,6 +119,7 @@ fun QsoTrainerScreen(
         onSubmitQsoStage = viewModel::submitQsoStage,
         onNextQsoStage = viewModel::nextQsoStage,
         onReplayQsoStageAudio = viewModel::replayQsoStageAudio,
+        onRequestQsoFieldFill = viewModel::requestQsoFieldFill,
         onPracticeCategory = viewModel::practiceWeakestCategory,
         onPreviewAudio = viewModel::previewItemAudio,
         onResetProgress = viewModel::resetProgress,
@@ -144,6 +149,7 @@ fun QsoTrainerScreen(
     onSubmitQsoStage: () -> Unit,
     onNextQsoStage: () -> Unit,
     onReplayQsoStageAudio: () -> Unit,
+    onRequestQsoFieldFill: (QsoExchangeFieldType) -> Unit = {},
     onPracticeCategory: (QsoCategory) -> Unit,
     onPreviewAudio: (String) -> Unit,
     onResetProgress: () -> Unit,
@@ -203,7 +209,8 @@ fun QsoTrainerScreen(
                     onSelectQsoFieldOption = onSelectQsoFieldOption,
                     onSubmitQsoStage = onSubmitQsoStage,
                     onNextQsoStage = onNextQsoStage,
-                    onReplayQsoStageAudio = onReplayQsoStageAudio
+                    onReplayQsoStageAudio = onReplayQsoStageAudio,
+                    onRequestQsoFieldFill = onRequestQsoFieldFill
                 )
                 QsoTrainerTab.STATS -> StatsAndStreaksTabContent(
                     stats = uiModel.stats,
@@ -987,6 +994,7 @@ fun FullQsoTabContent(
     onSubmitQsoStage: () -> Unit,
     onNextQsoStage: () -> Unit,
     onReplayQsoStageAudio: () -> Unit,
+    onRequestQsoFieldFill: (QsoExchangeFieldType) -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val view = LocalView.current
@@ -1047,7 +1055,8 @@ fun FullQsoTabContent(
                 onSelectOption = { option ->
                     view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
                     onSelectQsoFieldOption(field.fieldType, option)
-                }
+                },
+                onRequestQsoFieldFill = onRequestQsoFieldFill
             )
         }
 
@@ -1211,8 +1220,11 @@ private fun LogbookFieldCell(
 private fun QsoFieldSelectionCard(
     field: QsoFieldPresentation,
     areOptionsEnabled: Boolean,
-    onSelectOption: (String) -> Unit
+    onSelectOption: (String) -> Unit,
+    onRequestQsoFieldFill: (QsoExchangeFieldType) -> Unit = {}
 ) {
+    val view = LocalView.current
+
     OutlinedCard(modifier = Modifier.fillMaxWidth()) {
         Column(
             modifier = Modifier
@@ -1220,11 +1232,41 @@ private fun QsoFieldSelectionCard(
                 .padding(12.dp),
             verticalArrangement = Arrangement.spacedBy(8.dp)
         ) {
-            Text(
-                text = field.label,
-                style = MaterialTheme.typography.titleSmall,
-                fontWeight = FontWeight.SemiBold
-            )
+            Row(
+                modifier = Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.SpaceBetween,
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Text(
+                    text = field.label,
+                    style = MaterialTheme.typography.titleSmall,
+                    fontWeight = FontWeight.SemiBold,
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+
+                Spacer(modifier = Modifier.width(8.dp))
+
+                AssistChip(
+                    onClick = {
+                        view.performHapticFeedback(HapticFeedbackConstants.VIRTUAL_KEY)
+                        onRequestQsoFieldFill(field.fieldType)
+                    },
+                    label = {
+                        Text(
+                            text = field.fillActionLabel,
+                            style = MaterialTheme.typography.labelSmall
+                        )
+                    },
+                    leadingIcon = {
+                        Icon(
+                            painter = painterResource(id = R.drawable.ic_volume_up),
+                            contentDescription = null,
+                            modifier = Modifier.size(16.dp)
+                        )
+                    },
+                    enabled = field.isFillActionEnabled
+                )
+            }
 
             field.options.chunked(2).forEach { rowOptions ->
                 Row(

@@ -139,7 +139,9 @@ object QsoTrainerUiMapper {
                 selectedOption = selectedOption,
                 correctValue = challenge.correctValue,
                 isCorrect = fieldCorrect,
-                options = optionStates
+                options = optionStates,
+                fillActionLabel = challenge.fieldType.fillActionLabel,
+                isFillActionEnabled = !isSubmitted
             )
         }
 

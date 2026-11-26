@@ -165,7 +165,9 @@ data class QsoFieldPresentation(
     val selectedOption: String?,
     val correctValue: String,
     val isCorrect: Boolean?,
-    val options: List<OptionPresentationState>
+    val options: List<OptionPresentationState>,
+    val fillActionLabel: String = fieldType.fillActionLabel,
+    val isFillActionEnabled: Boolean = true
 )
 
 data class FullQsoLogbookSummary(
