@@ -143,4 +143,90 @@ class MorseAudioPlayerImplTest {
         assertTrue("Expected flush before release, events=${sink.events}", flushIdx in 0 until releaseIdx)
         assertTrue("Expected stop before release, events=${sink.events}", stopIdx in 0 until releaseIdx)
     }
+
+    @Test
+    fun `playback finishes naturally via timeout even when playbackHeadPosition stalls`() = runBlocking {
+        val releaseLatch = CountDownLatch(1)
+        val sink = FakeAudioTrackSink(
+            autoAdvanceHead = false,
+            onReleaseLatch = releaseLatch
+        )
+        val player = MorseAudioPlayerImpl(
+            morseSoundGenerator = MorseSoundGenerator(),
+            audioTrackFactory = { _, _ -> AudioTrackSession(sink, 1024) },
+            dispatcher = Dispatchers.Default
+        )
+
+        // At 60 WPM, total sound is ~370ms; expectedDuration + 500ms timeout is ~870ms
+        val fastPrefs = UserPreferences(wpm = 60, farnsworthWpm = 60, frequency = 700)
+        player.play("E", fastPrefs)
+
+        assertTrue("Expected playback to finish and release via timeout", releaseLatch.await(3, TimeUnit.SECONDS))
+        assertTrue("Expected stop and release in events", sink.events.contains("stop") && sink.events.contains("release"))
+    }
+
+    @Test
+    fun `consecutive play calls cancel and release previous track cleanly before starting next`() = runBlocking {
+        val releaseLatch1 = CountDownLatch(1)
+        val releaseLatch2 = CountDownLatch(1)
+        val sink1 = FakeAudioTrackSink(autoAdvanceHead = false, onReleaseLatch = releaseLatch1)
+        val sink2 = FakeAudioTrackSink(autoAdvanceHead = true, onReleaseLatch = releaseLatch2)
+        var creationCount = 0
+
+        val player = MorseAudioPlayerImpl(
+            morseSoundGenerator = MorseSoundGenerator(),
+            audioTrackFactory = { _, _ ->
+                creationCount++
+                if (creationCount == 1) AudioTrackSession(sink1, 1024) else AudioTrackSession(sink2, 1024)
+            },
+            dispatcher = Dispatchers.Default
+        )
+
+        val prefs = UserPreferences()
+        player.play("SOS", prefs)
+        // Immediately start another playback while the first is ongoing
+        player.play("E", prefs)
+
+        assertTrue("Expected first track to be cancelled and released", releaseLatch1.await(2, TimeUnit.SECONDS))
+        assertTrue("Expected second track to complete and release", releaseLatch2.await(2, TimeUnit.SECONDS))
+        assertEquals(2, creationCount)
+    }
+
+    @Test
+    fun `rapid consecutive play calls ensure every created track is released and no track is leaked`() = runBlocking {
+        val createdSinks = CopyOnWriteArrayList<FakeAudioTrackSink>()
+        val releaseLatches = CopyOnWriteArrayList<CountDownLatch>()
+
+        val player = MorseAudioPlayerImpl(
+            morseSoundGenerator = MorseSoundGenerator(),
+            audioTrackFactory = { _, _ ->
+                val latch = CountDownLatch(1)
+                releaseLatches.add(latch)
+                val sink = FakeAudioTrackSink(autoAdvanceHead = true, onReleaseLatch = latch)
+                createdSinks.add(sink)
+                AudioTrackSession(sink, 1024)
+            },
+            dispatcher = Dispatchers.Default
+        )
+
+        val prefs = UserPreferences(wpm = 60, farnsworthWpm = 60)
+        repeat(5) {
+            player.play("E", prefs)
+        }
+
+        // Wait for all created sinks to be released
+        // Wait up to 5 seconds
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 5000) {
+            if (createdSinks.isNotEmpty() && releaseLatches.all { it.count == 0L }) {
+                break
+            }
+            kotlinx.coroutines.delay(50)
+        }
+
+        assertTrue("Expected at least one track to be created", createdSinks.isNotEmpty())
+        for (latch in releaseLatches) {
+            assertEquals("Expected all created tracks to be released", 0L, latch.count)
+        }
+    }
 }

@@ -8,10 +8,12 @@ import kotlinx.coroutines.CancellationException
 import kotlinx.coroutines.CoroutineDispatcher
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
-import kotlinx.coroutines.Job
 import kotlinx.coroutines.NonCancellable
 import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.channels.Channel
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.isActive
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -38,32 +40,54 @@ class MorseAudioPlayerImpl(
     private val sampleRate = 44100
     private val tag = "MorseAudioPlayerImpl"
     private val scope = CoroutineScope(dispatcher + SupervisorJob())
-    private var playJob: Job? = null
 
-    override fun play(text: String, preferences: UserPreferences) {
-        stop()
+    private sealed interface PlayerCommand {
+        data class Play(val text: String, val preferences: UserPreferences) : PlayerCommand
+        data object Stop : PlayerCommand
+    }
 
-        playJob = scope.launch {
-            try {
-                val soundData = morseSoundGenerator.generate(
-                    text,
-                    preferences.wpm,
-                    preferences.farnsworthWpm,
-                    preferences.frequency,
-                    sampleRate
-                )
-                playSound(soundData, sampleRate)
-            } catch (e: CancellationException) {
-                throw e
-            } catch (e: Exception) {
-                Log.e(tag, "Error in playback coroutine", e)
+    private val commandChannel = Channel<PlayerCommand>(capacity = Channel.UNLIMITED)
+
+    init {
+        scope.launch {
+            commandChannel.receiveAsFlow().collectLatest { command ->
+                when (command) {
+                    is PlayerCommand.Play -> {
+                        executePlayback(command.text, command.preferences)
+                    }
+                    is PlayerCommand.Stop -> {
+                        Log.d(tag, "Playback idle (stopped)")
+                    }
+                }
             }
         }
     }
 
+    override fun play(text: String, preferences: UserPreferences) {
+        Log.d(tag, "play() requested: '$text' (wpm=${preferences.wpm}, freq=${preferences.frequency})")
+        commandChannel.trySend(PlayerCommand.Play(text, preferences))
+    }
+
     override fun stop() {
-        playJob?.cancel()
-        playJob = null
+        Log.d(tag, "stop() requested")
+        commandChannel.trySend(PlayerCommand.Stop)
+    }
+
+    private suspend fun executePlayback(text: String, preferences: UserPreferences) {
+        try {
+            val soundData = morseSoundGenerator.generate(
+                text = text,
+                wpm = preferences.wpm,
+                farnsworthWpm = preferences.farnsworthWpm,
+                frequency = preferences.frequency,
+                sampleRate = sampleRate
+            )
+            playSound(soundData, sampleRate)
+        } catch (e: CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Log.e(tag, "Error in playback coroutine for '$text'", e)
+        }
     }
 
     private suspend fun playSound(soundData: ShortArray, sampleRate: Int) {
@@ -75,7 +99,6 @@ class MorseAudioPlayerImpl(
 
         try {
             var offset = 0
-            // Prime the buffer with the initial chunk before starting playback to prevent underrun clicks
             val initialShorts = minOf(soundData.size, chunkSizeInShorts)
             val initialWritten = audioTrack.write(soundData, 0, initialShorts)
             if (initialWritten > 0) {
@@ -93,9 +116,15 @@ class MorseAudioPlayerImpl(
                 yield()
             }
 
-            // Wait for the hardware to finish playing
+            val expectedDurationMs = (soundData.size * 1000L) / sampleRate
+            val deadlineMs = System.currentTimeMillis() + expectedDurationMs + DRAIN_BUFFER_TIMEOUT_MARGIN_MS
+
             while (audioTrack.playbackHeadPosition < soundData.size && coroutineContext.isActive) {
-                delay(50)
+                if (System.currentTimeMillis() >= deadlineMs) {
+                    Log.w(tag, "Drain buffer timed out! headPos=${audioTrack.playbackHeadPosition}, total=${soundData.size}")
+                    break
+                }
+                delay(20)
             }
             if (coroutineContext.isActive) {
                 completedNaturally = true
@@ -116,7 +145,8 @@ class MorseAudioPlayerImpl(
                         audioTrack.flush()
                     }
                     audioTrack.stop()
-                } catch (_: Exception) {
+                } catch (e: Exception) {
+                    Log.w(tag, "Error during AudioTrack teardown: ${e.message}")
                 } finally {
                     audioTrack.release()
                 }
@@ -127,6 +157,7 @@ class MorseAudioPlayerImpl(
     companion object {
         private val FADE_OUT_GAIN_STEPS = floatArrayOf(0.5f, 0.2f, 0f)
         private const val FADE_OUT_STEP_DELAY_MS = 3L
+        private const val DRAIN_BUFFER_TIMEOUT_MARGIN_MS = 2500L
     }
 
     private object AndroidAudioTrackFactory : AudioTrackFactory {
@@ -136,9 +167,12 @@ class MorseAudioPlayerImpl(
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             )
-            val chunkSizeInShorts = (minBufferSize / 2).coerceAtLeast(512)
-            val chunkSizeInBytes = chunkSizeInShorts * 2
-            val bufferSizeInBytes = maxOf(minBufferSize, chunkSizeInBytes * 2)
+            val totalBytes = totalShorts * 2
+            val chunkSizeInShorts = minOf(totalShorts, maxOf(minBufferSize / 2, 2048))
+            // Buffer must be at least minBufferSize. For short sounds, do not exceed totalBytes so the
+            // buffer fills completely and triggers playback immediately on older APIs.
+            // For longer sounds, allow up to minBufferSize * 4 (~160ms) to ensure smooth streaming.
+            val bufferSizeInBytes = maxOf(minBufferSize, minOf(totalBytes, minBufferSize * 4))
 
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
@@ -157,6 +191,11 @@ class MorseAudioPlayerImpl(
                 .setBufferSizeInBytes(bufferSizeInBytes)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val startThreshold = minOf(totalShorts, chunkSizeInShorts)
+                track.setStartThresholdInFrames(startThreshold)
+            }
 
             val sink = object : AudioTrackSink {
                 override val playbackHeadPosition: Int
