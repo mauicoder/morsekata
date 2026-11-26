@@ -124,7 +124,7 @@ class MorseAudioPlayerImpl(
                     Log.w(tag, "Drain buffer timed out! headPos=${audioTrack.playbackHeadPosition}, total=${soundData.size}")
                     break
                 }
-                delay(20)
+                delay(DRAIN_POLL_INTERVAL_MS)
             }
             if (coroutineContext.isActive) {
                 completedNaturally = true
@@ -158,6 +158,9 @@ class MorseAudioPlayerImpl(
         private val FADE_OUT_GAIN_STEPS = floatArrayOf(0.5f, 0.2f, 0f)
         private const val FADE_OUT_STEP_DELAY_MS = 3L
         private const val DRAIN_BUFFER_TIMEOUT_MARGIN_MS = 2500L
+        private const val DRAIN_POLL_INTERVAL_MS = 20L
+        private const val MIN_CHUNK_SIZE_IN_SHORTS = 2048
+        private const val MAX_BUFFER_MULTIPLIER = 4
     }
 
     private object AndroidAudioTrackFactory : AudioTrackFactory {
@@ -168,11 +171,11 @@ class MorseAudioPlayerImpl(
                 AudioFormat.ENCODING_PCM_16BIT
             )
             val totalBytes = totalShorts * 2
-            val chunkSizeInShorts = minOf(totalShorts, maxOf(minBufferSize / 2, 2048))
+            val chunkSizeInShorts = minOf(totalShorts, maxOf(minBufferSize / 2, MIN_CHUNK_SIZE_IN_SHORTS))
             // Buffer must be at least minBufferSize. For short sounds, do not exceed totalBytes so the
             // buffer fills completely and triggers playback immediately on older APIs.
-            // For longer sounds, allow up to minBufferSize * 4 (~160ms) to ensure smooth streaming.
-            val bufferSizeInBytes = maxOf(minBufferSize, minOf(totalBytes, minBufferSize * 4))
+            // For longer sounds, allow up to minBufferSize * MAX_BUFFER_MULTIPLIER (~160ms) to ensure smooth streaming.
+            val bufferSizeInBytes = maxOf(minBufferSize, minOf(totalBytes, minBufferSize * MAX_BUFFER_MULTIPLIER))
 
             val track = AudioTrack.Builder()
                 .setAudioAttributes(
