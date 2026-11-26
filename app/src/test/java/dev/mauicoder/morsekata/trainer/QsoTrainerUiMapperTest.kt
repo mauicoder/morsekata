@@ -458,6 +458,8 @@ class QsoTrainerUiMapperTest {
         assertEquals("", partialSelectionUi.revealedMorsePattern)
         partialSelectionUi.fields.forEach { field ->
             assertNull(field.isCorrect)
+            assertTrue(field.isFillActionEnabled)
+            assertEquals(field.fieldType.fillActionLabel, field.fillActionLabel)
             field.options.forEach { opt ->
                 assertEquals(OptionHighlightState.DEFAULT, opt.highlightState)
             }
@@ -502,6 +504,8 @@ class QsoTrainerUiMapperTest {
 
         val mappedRst = submittedPartialUi.fields.first { it.fieldType == QsoExchangeFieldType.RST }
         assertEquals(true, mappedRst.isCorrect)
+        assertFalse(mappedRst.isFillActionEnabled)
+        assertEquals(QsoExchangeFieldType.RST.fillActionLabel, mappedRst.fillActionLabel)
         assertEquals(
             OptionHighlightState.CORRECT,
             mappedRst.options.first { it.text == session.rst }.highlightState
@@ -565,6 +569,33 @@ class QsoTrainerUiMapperTest {
         assertEquals(28, populatedStats.bestCallsignWpm)
         assertEquals("28 WPM", populatedStats.bestCallsignWpmText)
         assertEquals(42, populatedStats.completedCallsignCount)
+    }
+
+    @Test
+    fun `mapFullQso maps fillActionLabel from fieldType and sets isFillActionEnabled according to stage submission`() {
+        val session = QsoExchangeGenerator.generateSession(Random(42))
+        val unsubmittedState = QsoTrainerUiState(
+            currentEntry = sampleEntry,
+            options = sampleOptions,
+            fullQsoSession = session,
+            currentQsoStage = QsoStage.MAIN_EXCHANGE,
+            isQsoStageSubmitted = false
+        )
+
+        val unsubmittedUi = QsoTrainerUiMapper.mapFullQso(unsubmittedState)
+        assertEquals(4, unsubmittedUi.fields.size)
+        unsubmittedUi.fields.forEach { field ->
+            assertEquals(field.fieldType.fillActionLabel, field.fillActionLabel)
+            assertTrue("Expected fill action enabled for ${field.fieldType}", field.isFillActionEnabled)
+        }
+
+        val submittedState = unsubmittedState.copy(isQsoStageSubmitted = true)
+        val submittedUi = QsoTrainerUiMapper.mapFullQso(submittedState)
+        assertEquals(4, submittedUi.fields.size)
+        submittedUi.fields.forEach { field ->
+            assertEquals(field.fieldType.fillActionLabel, field.fillActionLabel)
+            assertFalse("Expected fill action disabled when submitted for ${field.fieldType}", field.isFillActionEnabled)
+        }
     }
 }
 

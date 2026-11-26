@@ -121,6 +121,8 @@ object QsoTrainerUiMapper {
             weather = if (revealStage3) session.weather else "—"
         )
 
+        val areFieldOptionsEnabled = !isSubmitted
+
         val fields = activeStage.fields.map { challenge ->
             val selectedOption = state.selectedQsoFieldOptions[challenge.fieldType]
             val fieldCorrect = if (isSubmitted) selectedOption == challenge.correctValue else null
@@ -139,7 +141,8 @@ object QsoTrainerUiMapper {
                 selectedOption = selectedOption,
                 correctValue = challenge.correctValue,
                 isCorrect = fieldCorrect,
-                options = optionStates
+                options = optionStates,
+                isFillActionEnabled = areFieldOptionsEnabled && !isSubmitted
             )
         }
 
@@ -198,7 +201,7 @@ object QsoTrainerUiMapper {
             completedFullQsoCount = state.completedFullQsoCount,
             logbook = logbook,
             fields = fields,
-            areFieldOptionsEnabled = !isSubmitted,
+            areFieldOptionsEnabled = areFieldOptionsEnabled,
             canSubmitStage = !isSubmitted && activeStage.fields.all { it.fieldType in state.selectedQsoFieldOptions },
             isNextStageEnabled = isSubmitted,
             nextActionLabel = nextActionLabel,

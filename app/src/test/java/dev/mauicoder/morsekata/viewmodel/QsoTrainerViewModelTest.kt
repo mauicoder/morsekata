@@ -741,6 +741,101 @@ class QsoTrainerViewModelTest {
         assertEquals(1, afterPartialStage2.bestStreak)
     }
 
+    @Test
+    fun `requestQsoFieldFill plays procedural fill text via morseAudioPlayer and increments replay count`() {
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        val session = viewModel.uiState.value.fullQsoSession
+
+        // Request CALLSIGN fill in Stage 1
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.CALLSIGN)
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
+        assertEquals(
+            session.fillTransmissionTextFor(QsoExchangeFieldType.CALLSIGN) to viewModel.userPreferences.value,
+            fakeAudioPlayer.playCalls.last()
+        )
+
+        // Advance to Stage 2
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
+        viewModel.submitQsoStage()
+        viewModel.nextQsoStage()
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Request RST fill in Stage 2
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.RST)
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
+        assertEquals(
+            session.fillTransmissionTextFor(QsoExchangeFieldType.RST) to viewModel.userPreferences.value,
+            fakeAudioPlayer.playCalls.last()
+        )
+    }
+
+    @Test
+    fun `requestQsoFieldFill for field outside active stage is a no-op with no audio and no replay count increment`() {
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        assertEquals(QsoStage.CQ_CALL, viewModel.uiState.value.currentQsoStage)
+        val initialPlayCalls = fakeAudioPlayer.playCalls.size
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Stage 1 only includes CALLSIGN. Requesting WEATHER should be a no-op
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.WEATHER)
+        assertEquals(initialPlayCalls, fakeAudioPlayer.playCalls.size)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Requesting RST in Stage 1 is also a no-op
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.RST)
+        assertEquals(initialPlayCalls, fakeAudioPlayer.playCalls.size)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+    }
+
+    @Test
+    fun `requestQsoFieldFill is no-op when stage is submitted or when tab is not FULL_QSO`() {
+        // Tab is PRACTICE initially
+        assertEquals(QsoTrainerTab.PRACTICE, viewModel.uiState.value.selectedTab)
+        val initialPlayCount = fakeAudioPlayer.playCalls.size
+
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.CALLSIGN)
+        assertEquals(initialPlayCount, fakeAudioPlayer.playCalls.size)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Switch to FULL_QSO and complete/submit Stage 1
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        val session = viewModel.uiState.value.fullQsoSession
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
+        viewModel.submitQsoStage()
+        assertTrue(viewModel.uiState.value.isQsoStageSubmitted)
+
+        val playCountAfterSubmit = fakeAudioPlayer.playCalls.size
+        val replayCountAfterSubmit = viewModel.uiState.value.qsoStageReplayCount
+
+        // Request fill on submitted stage should be no-op
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.CALLSIGN)
+        assertEquals(playCountAfterSubmit, fakeAudioPlayer.playCalls.size)
+        assertEquals(replayCountAfterSubmit, viewModel.uiState.value.qsoStageReplayCount)
+    }
+
+    @Test
+    fun `submitting stage after requestQsoFieldFill forfeits FirstCopy bonus while retaining base XP and combo streak`() {
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        val session = viewModel.uiState.value.fullQsoSession
+
+        // Stage 1: Request fill before submitting -> increments replay count
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.CALLSIGN)
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Answer correctly and submit
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
+        viewModel.submitQsoStage()
+
+        // Clean copy with fill requested -> 5 base XP, 0 streak bonus, 0 first-copy bonus, streak = 1
+        val state = viewModel.uiState.value
+        assertTrue(state.isQsoStageSubmitted)
+        assertEquals(XpAward(baseXp = 5, streakBonusXp = 0, firstCopyBonusXp = 0), state.qsoStageXpAward)
+        assertEquals(1, state.streak)
+        assertEquals(5, state.totalXp)
+    }
+
     private class FakeUserPreferencesRepository(
         initialPreferences: UserPreferences = UserPreferences()
     ) : UserPreferencesRepository {

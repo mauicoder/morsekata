@@ -102,4 +102,53 @@ class QsoExchangeGeneratorTest {
             previousCallsign = session.dxCallsign
         }
     }
+
+    @Test
+    fun `fillActionLabel returns expected standard procedural repeat prosign for every field type`() {
+        val expectedLabels = mapOf(
+            QsoExchangeFieldType.CALLSIGN to "AGN PSE CALL",
+            QsoExchangeFieldType.RST to "AGN PSE RST",
+            QsoExchangeFieldType.QTH to "AGN PSE QTH",
+            QsoExchangeFieldType.OP_NAME to "AGN PSE NAME",
+            QsoExchangeFieldType.CONDITION to "AGN PSE COND",
+            QsoExchangeFieldType.RIG to "AGN PSE RIG",
+            QsoExchangeFieldType.POWER to "AGN PSE PWR",
+            QsoExchangeFieldType.WEATHER to "AGN PSE WX"
+        )
+
+        assertEquals(8, QsoExchangeFieldType.entries.size)
+        for (fieldType in QsoExchangeFieldType.entries) {
+            assertEquals(
+                "Mismatched fill action label for field $fieldType",
+                expectedLabels[fieldType],
+                fieldType.fillActionLabel
+            )
+        }
+    }
+
+    @Test
+    fun `fillTransmissionTextFor returns standard doubled value with CW prefix and BK prosign for all field types`() {
+        val session = QsoExchangeGenerator.generateSession(random = Random(1234))
+
+        val expectedFills = mapOf(
+            QsoExchangeFieldType.CALLSIGN to "CALL ${session.dxCallsign} ${session.dxCallsign} BK",
+            QsoExchangeFieldType.RST to "UR RST ${session.rst} ${session.rst} BK",
+            QsoExchangeFieldType.QTH to "QTH ${session.qth} ${session.qth} BK",
+            QsoExchangeFieldType.OP_NAME to "OP ${session.opName} ${session.opName} BK",
+            QsoExchangeFieldType.CONDITION to "SIG ${session.condition} ${session.condition} BK",
+            QsoExchangeFieldType.RIG to "RIG ${session.rig} ${session.rig} BK",
+            QsoExchangeFieldType.POWER to "PWR ${session.power} ${session.power} BK",
+            QsoExchangeFieldType.WEATHER to "WX ${session.weather} ${session.weather} BK"
+        )
+
+        assertEquals(8, QsoExchangeFieldType.entries.size)
+        for (fieldType in QsoExchangeFieldType.entries) {
+            val fillText = session.fillTransmissionTextFor(fieldType)
+            assertEquals(
+                "Mismatched fill transmission text for field $fieldType",
+                expectedFills[fieldType],
+                fillText
+            )
+        }
+    }
 }
