@@ -564,6 +564,24 @@ class QsoTrainerViewModel @Inject constructor(
         morseAudioPlayer.play(transmitText, userPreferences.value)
     }
 
+    fun requestQsoFieldFill(fieldType: QsoExchangeFieldType) {
+        val current = _uiState.value
+        if (current.selectedTab != QsoTrainerTab.FULL_QSO || current.isQsoStageSubmitted) {
+            return
+        }
+        val updated = _uiState.updateAndGet { state ->
+            if (state.selectedTab == QsoTrainerTab.FULL_QSO && !state.isQsoStageSubmitted) {
+                state.copy(qsoStageReplayCount = state.qsoStageReplayCount + 1)
+            } else {
+                state
+            }
+        }
+        if (updated.qsoStageReplayCount > current.qsoStageReplayCount) {
+            val fillText = updated.fullQsoSession.fillTransmissionTextFor(fieldType)
+            morseAudioPlayer.play(fillText, userPreferences.value)
+        }
+    }
+
     private fun createInitialState(
         category: QsoCategory,
         progress: TrainerProgress,
