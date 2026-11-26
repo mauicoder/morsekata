@@ -181,7 +181,7 @@ class MorseAudioPlayerImpl(
     companion object {
         private val FADE_OUT_GAIN_STEPS = floatArrayOf(0.5f, 0.2f, 0f)
         private const val FADE_OUT_STEP_DELAY_MS = 3L
-        private const val DRAIN_BUFFER_TIMEOUT_MARGIN_MS = 500L
+        private const val DRAIN_BUFFER_TIMEOUT_MARGIN_MS = 2500L
     }
 
     private object AndroidAudioTrackFactory : AudioTrackFactory {
@@ -191,9 +191,12 @@ class MorseAudioPlayerImpl(
                 AudioFormat.CHANNEL_OUT_MONO,
                 AudioFormat.ENCODING_PCM_16BIT
             )
-            // Ensure a robust buffer for Bluetooth A2DP & modern Android audio pipelines (at least 64KB / ~740ms)
-            val bufferSizeInBytes = maxOf(minBufferSize * 8, 65536)
-            val chunkSizeInShorts = (minBufferSize * 2).coerceAtLeast(4096)
+            val totalBytes = totalShorts * 2
+            val chunkSizeInShorts = minOf(totalShorts, maxOf(minBufferSize / 2, 2048))
+            // Buffer must be at least minBufferSize. For short sounds, do not exceed totalBytes so the
+            // buffer fills completely and triggers playback immediately on older APIs.
+            // For longer sounds, allow up to minBufferSize * 4 (~160ms) to ensure smooth streaming.
+            val bufferSizeInBytes = maxOf(minBufferSize, minOf(totalBytes, minBufferSize * 4))
 
             Log.d("MorseAudioPlayerImpl", "Creating AudioTrack: sampleRate=$sampleRate, totalShorts=$totalShorts, minBufferSize=$minBufferSize, bufferSizeInBytes=$bufferSizeInBytes, chunkSizeInShorts=$chunkSizeInShorts")
 
@@ -214,6 +217,12 @@ class MorseAudioPlayerImpl(
                 .setBufferSizeInBytes(bufferSizeInBytes)
                 .setTransferMode(AudioTrack.MODE_STREAM)
                 .build()
+
+            if (android.os.Build.VERSION.SDK_INT >= android.os.Build.VERSION_CODES.S) {
+                val startThreshold = minOf(totalShorts, chunkSizeInShorts)
+                val result = track.setStartThresholdInFrames(startThreshold)
+                Log.d("MorseAudioPlayerImpl", "setStartThresholdInFrames: requested=$startThreshold, returned=$result, active=${track.startThresholdInFrames}")
+            }
 
             Log.d("MorseAudioPlayerImpl", "AudioTrack created: state=${track.state} (STATE_INITIALIZED=${AudioTrack.STATE_INITIALIZED})")
 
