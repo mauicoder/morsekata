@@ -107,15 +107,18 @@ enum class QsoStage(val stepNumber: Int, val title: String) {
     FINAL_SIGN_OFF(3, "Stage 3/3: Technical & 73")
 }
 
-enum class QsoExchangeFieldType(val label: String) {
-    CALLSIGN("Station Callsign"),
-    RST("Signal Report (RST)"),
-    QTH("Location (QTH)"),
-    OP_NAME("Operator Name"),
-    CONDITION("Band Condition"),
-    RIG("Transceiver (Rig)"),
-    POWER("Transmit Power"),
-    WEATHER("Weather (WX)")
+enum class QsoExchangeFieldType(
+    val label: String,
+    val fillActionLabel: String
+) {
+    CALLSIGN("Station Callsign", "AGN PSE CALL"),
+    RST("Signal Report (RST)", "AGN PSE RST"),
+    QTH("Location (QTH)", "AGN PSE QTH"),
+    OP_NAME("Operator Name", "AGN PSE NAME"),
+    CONDITION("Band Condition", "AGN PSE COND"),
+    RIG("Transceiver (Rig)", "AGN PSE RIG"),
+    POWER("Transmit Power", "AGN PSE PWR"),
+    WEATHER("Weather (WX)", "AGN PSE WX")
 }
 
 data class QsoFieldChallenge(
@@ -143,6 +146,17 @@ data class FullQsoSession(
 ) {
     fun stageChallenge(stage: QsoStage): QsoStageChallenge =
         stages.first { it.stage == stage }
+
+    fun fillTransmissionTextFor(fieldType: QsoExchangeFieldType): String = when (fieldType) {
+        QsoExchangeFieldType.CALLSIGN -> "CALL $dxCallsign $dxCallsign BK"
+        QsoExchangeFieldType.RST -> "UR RST $rst $rst BK"
+        QsoExchangeFieldType.QTH -> "QTH $qth $qth BK"
+        QsoExchangeFieldType.OP_NAME -> "OP $opName $opName BK"
+        QsoExchangeFieldType.CONDITION -> "SIG $condition $condition BK"
+        QsoExchangeFieldType.RIG -> "RIG $rig $rig BK"
+        QsoExchangeFieldType.POWER -> "PWR $power $power BK"
+        QsoExchangeFieldType.WEATHER -> "WX $weather $weather BK"
+    }
 }
 
 data class QsoFieldPresentation(
