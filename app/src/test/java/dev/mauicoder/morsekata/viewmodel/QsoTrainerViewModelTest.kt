@@ -748,7 +748,7 @@ class QsoTrainerViewModelTest {
 
         val session = viewModel.uiState.value.fullQsoSession
 
-        // Request CALLSIGN fill
+        // Request CALLSIGN fill in Stage 1
         viewModel.requestQsoFieldFill(QsoExchangeFieldType.CALLSIGN)
         assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
         assertEquals(
@@ -756,13 +756,37 @@ class QsoTrainerViewModelTest {
             fakeAudioPlayer.playCalls.last()
         )
 
-        // Request RST fill
+        // Advance to Stage 2
+        viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
+        viewModel.submitQsoStage()
+        viewModel.nextQsoStage()
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Request RST fill in Stage 2
         viewModel.requestQsoFieldFill(QsoExchangeFieldType.RST)
-        assertEquals(2, viewModel.uiState.value.qsoStageReplayCount)
+        assertEquals(1, viewModel.uiState.value.qsoStageReplayCount)
         assertEquals(
             session.fillTransmissionTextFor(QsoExchangeFieldType.RST) to viewModel.userPreferences.value,
             fakeAudioPlayer.playCalls.last()
         )
+    }
+
+    @Test
+    fun `requestQsoFieldFill for field outside active stage is a no-op with no audio and no replay count increment`() {
+        viewModel.selectTab(QsoTrainerTab.FULL_QSO)
+        assertEquals(QsoStage.CQ_CALL, viewModel.uiState.value.currentQsoStage)
+        val initialPlayCalls = fakeAudioPlayer.playCalls.size
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Stage 1 only includes CALLSIGN. Requesting WEATHER should be a no-op
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.WEATHER)
+        assertEquals(initialPlayCalls, fakeAudioPlayer.playCalls.size)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
+
+        // Requesting RST in Stage 1 is also a no-op
+        viewModel.requestQsoFieldFill(QsoExchangeFieldType.RST)
+        assertEquals(initialPlayCalls, fakeAudioPlayer.playCalls.size)
+        assertEquals(0, viewModel.uiState.value.qsoStageReplayCount)
     }
 
     @Test
