@@ -199,4 +199,42 @@ class MorseAudioPlayerImplTest {
         assertTrue("Expected second track to complete and release", releaseLatch2.await(2, TimeUnit.SECONDS))
         assertEquals(2, creationCount)
     }
+
+    @Test
+    fun `rapid consecutive play calls ensure every created track is released and no track is leaked`() = runBlocking {
+        val createdSinks = CopyOnWriteArrayList<FakeAudioTrackSink>()
+        val releaseLatches = CopyOnWriteArrayList<CountDownLatch>()
+
+        val player = MorseAudioPlayerImpl(
+            morseSoundGenerator = MorseSoundGenerator(),
+            audioTrackFactory = { _, _ ->
+                val latch = CountDownLatch(1)
+                releaseLatches.add(latch)
+                val sink = FakeAudioTrackSink(autoAdvanceHead = true, onReleaseLatch = latch)
+                createdSinks.add(sink)
+                AudioTrackSession(sink, 1024)
+            },
+            dispatcher = Dispatchers.Default
+        )
+
+        val prefs = UserPreferences(wpm = 60, farnsworthWpm = 60)
+        repeat(5) {
+            player.play("E", prefs)
+        }
+
+        // Wait for all created sinks to be released
+        // Wait up to 5 seconds
+        val startTime = System.currentTimeMillis()
+        while (System.currentTimeMillis() - startTime < 5000) {
+            if (createdSinks.isNotEmpty() && releaseLatches.all { it.count == 0L }) {
+                break
+            }
+            kotlinx.coroutines.delay(50)
+        }
+
+        assertTrue("Expected at least one track to be created", createdSinks.isNotEmpty())
+        for (latch in releaseLatches) {
+            assertEquals("Expected all created tracks to be released", 0L, latch.count)
+        }
+    }
 }
