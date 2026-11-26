@@ -15,6 +15,8 @@ class MorseSoundGenerator {
         const val RELEASE_DURATION_MS = 14
         const val MAX_ENVELOPE_RATIO = 0.90
         const val PADDING_SILENCE_MS = 20
+        const val PLAYBACK_LEADING_SILENCE_MS = 250
+        const val PLAYBACK_TRAILING_SILENCE_MS = 100
 
         // 4-term Blackman-Harris window coefficients
         private const val BH_A0 = 0.35875
@@ -33,7 +35,9 @@ class MorseSoundGenerator {
         wpm: Int,
         farnsworthWpm: Int,
         frequency: Int,
-        sampleRate: Int
+        sampleRate: Int,
+        leadingSilenceMs: Int = PADDING_SILENCE_MS,
+        trailingSilenceMs: Int = PADDING_SILENCE_MS
     ): ShortArray {
         val validWords = text.uppercase()
             .trim()
@@ -54,10 +58,11 @@ class MorseSoundGenerator {
         val farnsworthDotDuration = morseTiming(farnsworthWpm)
         val interCharacterPauseSamples = 3 * farnsworthDotDuration * sampleRate / 1000
         val interWordPauseSamples = 7 * farnsworthDotDuration * sampleRate / 1000
-        val paddingSilenceSamples = PADDING_SILENCE_MS * sampleRate / 1000
+        val leadingSilenceSamples = leadingSilenceMs * sampleRate / 1000
+        val trailingSilenceSamples = trailingSilenceMs * sampleRate / 1000
 
         // Calculate exact total sample length for single-pass buffer allocation
-        var totalSamples = paddingSilenceSamples * 2
+        var totalSamples = leadingSilenceSamples + trailingSilenceSamples
         validWords.forEachIndexed { wordIndex, wordCharacters ->
             if (wordIndex > 0) {
                 totalSamples += interWordPauseSamples
@@ -80,7 +85,7 @@ class MorseSoundGenerator {
         }
 
         val output = ShortArray(totalSamples)
-        var cursor = paddingSilenceSamples
+        var cursor = leadingSilenceSamples
 
         validWords.forEachIndexed { wordIndex, wordCharacters ->
             if (wordIndex > 0) {
@@ -173,9 +178,19 @@ class MorseSoundGenerator {
         wpm: Int,
         farnsworthWpm: Int,
         frequency: Int,
-        sampleRate: Int
+        sampleRate: Int,
+        leadingSilenceMs: Int = PADDING_SILENCE_MS,
+        trailingSilenceMs: Int = PADDING_SILENCE_MS
     ): ByteArray {
-        val morseCodeShorts = generate(text, wpm, farnsworthWpm, frequency, sampleRate)
+        val morseCodeShorts = generate(
+            text = text,
+            wpm = wpm,
+            farnsworthWpm = farnsworthWpm,
+            frequency = frequency,
+            sampleRate = sampleRate,
+            leadingSilenceMs = leadingSilenceMs,
+            trailingSilenceMs = trailingSilenceMs
+        )
         val dataSizeInBytes = morseCodeShorts.size * 2
 
         val byteBuffer = ByteBuffer.allocate(44 + dataSizeInBytes).order(ByteOrder.LITTLE_ENDIAN)

@@ -41,16 +41,21 @@ class MorseAudioPlayerImpl(
     private var playJob: Job? = null
 
     override fun play(text: String, preferences: UserPreferences) {
-        stop()
-
+        val previousJob = playJob
         playJob = scope.launch {
+            if (previousJob != null && previousJob.isActive) {
+                previousJob.cancel()
+                previousJob.join()
+            }
             try {
                 val soundData = morseSoundGenerator.generate(
-                    text,
-                    preferences.wpm,
-                    preferences.farnsworthWpm,
-                    preferences.frequency,
-                    sampleRate
+                    text = text,
+                    wpm = preferences.wpm,
+                    farnsworthWpm = preferences.farnsworthWpm,
+                    frequency = preferences.frequency,
+                    sampleRate = sampleRate,
+                    leadingSilenceMs = MorseSoundGenerator.PLAYBACK_LEADING_SILENCE_MS,
+                    trailingSilenceMs = MorseSoundGenerator.PLAYBACK_TRAILING_SILENCE_MS
                 )
                 playSound(soundData, sampleRate)
             } catch (e: CancellationException) {
@@ -93,9 +98,16 @@ class MorseAudioPlayerImpl(
                 yield()
             }
 
-            // Wait for the hardware to finish playing
+            // Wait for the hardware to finish playing with a safe timeout to prevent hanging on underrun
+            val expectedDurationMs = (soundData.size * 1000L) / sampleRate
+            val timeoutMs = expectedDurationMs + DRAIN_BUFFER_TIMEOUT_MARGIN_MS
+            val deadlineMs = System.currentTimeMillis() + timeoutMs
+
             while (audioTrack.playbackHeadPosition < soundData.size && coroutineContext.isActive) {
-                delay(50)
+                if (System.currentTimeMillis() >= deadlineMs) {
+                    break
+                }
+                delay(20)
             }
             if (coroutineContext.isActive) {
                 completedNaturally = true
@@ -127,6 +139,7 @@ class MorseAudioPlayerImpl(
     companion object {
         private val FADE_OUT_GAIN_STEPS = floatArrayOf(0.5f, 0.2f, 0f)
         private const val FADE_OUT_STEP_DELAY_MS = 3L
+        private const val DRAIN_BUFFER_TIMEOUT_MARGIN_MS = 500L
     }
 
     private object AndroidAudioTrackFactory : AudioTrackFactory {
