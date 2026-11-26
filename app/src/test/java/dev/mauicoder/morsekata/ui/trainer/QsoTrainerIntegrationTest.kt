@@ -16,27 +16,27 @@ import dev.mauicoder.morsekata.viewmodel.QsoTrainerViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
-import org.junit.Assert.assertEquals
-import org.junit.Assert.assertFalse
-import org.junit.Assert.assertNotNull
-import org.junit.Assert.assertNull
-import org.junit.Assert.assertTrue
-import org.junit.Before
-import org.junit.Test
+import org.junit.jupiter.api.Assertions.assertEquals
+import org.junit.jupiter.api.Assertions.assertFalse
+import org.junit.jupiter.api.Assertions.assertNotNull
+import org.junit.jupiter.api.Assertions.assertNull
+import org.junit.jupiter.api.Assertions.assertTrue
+import org.junit.jupiter.api.BeforeEach
+import org.junit.jupiter.api.Test
 import java.time.Clock
 import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 import kotlin.random.Random
 
-class QsoTrainerScreenTest {
+class QsoTrainerIntegrationTest {
 
     private lateinit var fakePreferencesRepository: FakeUserPreferencesRepository
     private lateinit var fakeProgressRepository: FakeTrainerProgressRepository
     private lateinit var cancellableAudioPlayer: CancellableTrackingAudioPlayer
     private lateinit var viewModel: QsoTrainerViewModel
 
-    @Before
+    @BeforeEach
     fun setUp() {
         fakePreferencesRepository = FakeUserPreferencesRepository()
         fakeProgressRepository = FakeTrainerProgressRepository()
@@ -86,8 +86,8 @@ class QsoTrainerScreenTest {
         assertEquals(QsoExchangeFieldType.CALLSIGN, callsignField.fieldType)
         assertEquals("Station Callsign", callsignField.label)
         assertEquals("AGN PSE CALL", callsignField.fillActionLabel)
-        assertTrue("Fill action must be enabled prior to submission", callsignField.isFillActionEnabled)
-        assertFalse("Cannot submit stage until callsign is selected", stage1Ui.fullQso.canSubmitStage)
+        assertTrue(callsignField.isFillActionEnabled, "Fill action must be enabled prior to submission")
+        assertFalse(stage1Ui.fullQso.canSubmitStage, "Cannot submit stage until callsign is selected")
 
         // 3. Start over playback via Replay Over button
         viewModel.replayQsoStageAudio()
@@ -122,8 +122,8 @@ class QsoTrainerScreenTest {
         viewModel.selectQsoFieldOption(QsoExchangeFieldType.CALLSIGN, session.dxCallsign)
         val readyState = viewModel.uiState.value
         val readyUi = QsoTrainerUiMapper.map(readyState)
-        assertTrue("Submit must be enabled when option is selected", readyUi.fullQso.canSubmitStage)
-        assertTrue("Fill chip must remain enabled before submission", readyUi.fullQso.fields.first().isFillActionEnabled)
+        assertTrue(readyUi.fullQso.canSubmitStage, "Submit must be enabled when option is selected")
+        assertTrue(readyUi.fullQso.fields.first().isFillActionEnabled, "Fill chip must remain enabled before submission")
 
         // 7. Submit stage:
         viewModel.submitQsoStage()
@@ -133,11 +133,11 @@ class QsoTrainerScreenTest {
 
         assertTrue(submittedState.isQsoStageSubmitted)
         assertFalse(submittedUi.fullQso.areFieldOptionsEnabled)
-        assertFalse("Submit button should be disabled after submission", submittedUi.fullQso.canSubmitStage)
-        assertTrue("Next stage button should be enabled after submission", submittedUi.fullQso.isNextStageEnabled)
+        assertFalse(submittedUi.fullQso.canSubmitStage, "Submit button should be disabled after submission")
+        assertTrue(submittedUi.fullQso.isNextStageEnabled, "Next stage button should be enabled after submission")
 
         // Fill chip MUST be disabled upon stage submission
-        assertFalse("Fill chip must be disabled once stage is submitted", submittedUi.fullQso.fields.first().isFillActionEnabled)
+        assertFalse(submittedUi.fullQso.fields.first().isFillActionEnabled, "Fill chip must be disabled once stage is submitted")
 
         // Post-submission fill requests must be no-ops
         val playCallsBeforeNoOp = cancellableAudioPlayer.playHistory.size
@@ -194,7 +194,7 @@ class QsoTrainerScreenTest {
         assertEquals("AGN PSE COND", stage2Fields[QsoExchangeFieldType.CONDITION]?.fillActionLabel)
 
         stage2Fields.values.forEach { field ->
-            assertTrue("Field ${field.fieldType} fill chip must be enabled", field.isFillActionEnabled)
+            assertTrue(field.isFillActionEnabled, "Field ${field.fieldType} fill chip must be enabled")
         }
 
         // Advancing to stage automatically primed playback with stage 2 over
@@ -232,7 +232,7 @@ class QsoTrainerScreenTest {
 
         assertTrue(submittedStage2State.isQsoStageSubmitted)
         submittedStage2Ui.fullQso.fields.forEach { field ->
-            assertFalse("Field ${field.fieldType} fill chip must be disabled post-submission", field.isFillActionEnabled)
+            assertFalse(field.isFillActionEnabled, "Field ${field.fieldType} fill chip must be disabled post-submission")
             assertEquals(OptionHighlightState.CORRECT, field.options.first { it.text == field.correctValue }.highlightState)
         }
 

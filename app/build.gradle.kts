@@ -73,6 +73,9 @@ configure<ApplicationExtension> {
 
     testOptions {
         unitTests.isReturnDefaultValues = true
+        unitTests.all {
+            it.useJUnitPlatform()
+        }
     }
 }
 
@@ -114,6 +117,9 @@ dependencies {
     implementation(libs.androidx.lifecycle.viewmodel.ktx)
 
     testImplementation(libs.junit)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.vintage.engine)
+    testRuntimeOnly(libs.junit.platform.launcher)
     androidTestImplementation(libs.androidx.junit)
     androidTestImplementation(libs.androidx.espresso.core)
 }
